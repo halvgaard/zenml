@@ -15,7 +15,7 @@ import functools
 from typing import Any, Callable, Optional, Type, TypeVar, Union, cast, overload
 
 from zenml.environment import Environment
-from zenml.integrations.mlflow.mlflow_utils import get_or_create_mlflow_run
+from zenml.integrations.mlflow.mlflow_environment import MLFlowStepEnvironment
 from zenml.logger import get_logger
 from zenml.steps import BaseStep
 from zenml.steps.utils import STEP_INNER_FUNC_NAME
@@ -146,10 +146,12 @@ def mlflow_step_entrypoint(
             )
             step_env = Environment().step_environment
             experiment = experiment_name or step_env.pipeline_name
-            with get_or_create_mlflow_run(
+            step_mlflow_env = MLFlowStepEnvironment(
                 experiment_name=experiment, run_name=step_env.pipeline_run_id
-            ):
-                return func(*args, **kwargs)
+            )
+            with step_mlflow_env:
+                with step_mlflow_env.mlflow_run:
+                    return func(*args, **kwargs)
 
         return cast(F, wrapper)
 

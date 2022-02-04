@@ -94,3 +94,16 @@ class MetadataContextTypes(Enum):
     """All possible types that contexts can have within pipeline nodes"""
 
     STACK = "stack"
+
+
+class ServiceRuntime(StrEnum):
+    """All possible types a `ServiceRuntime` can have."""
+
+    # managed service running as local process
+    PROCESS = "process"
+    # managed service running as a docker container
+    DOCKER_CONTAINER = "docker_container"
+    # managed service running as a kubernetes deployment
+    KUBERNETES = "kubernetes_deployment"
+    # unmanaged service
+    UNMANAGED = "unmanaged"
