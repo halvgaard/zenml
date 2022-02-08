@@ -95,7 +95,11 @@ def enable_mlflow(
         logger.debug(
             "Applying 'enable_mlflow' decorator to step %s", _step.__name__
         )
-
+        if not issubclass(_step, BaseStep):
+            raise RuntimeError(
+                "The `enable_mlflow` decorator can only be applied to a ZenML "
+                "`step` decorated function or a BaseStep subclass."
+            )
         source_fn = getattr(_step, STEP_INNER_FUNC_NAME)
         return cast(
             S,

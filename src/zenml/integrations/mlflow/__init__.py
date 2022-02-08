@@ -28,6 +28,7 @@ class MlflowIntegration(Integration):
     @staticmethod
     def activate() -> None:
         """Activate the MLflow integration."""
+        from zenml.integrations.mlflow import materializers  # noqa
         from zenml.integrations.mlflow.mlflow_environment import (
             MLFlowEnvironment,
         )
