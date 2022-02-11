@@ -11,6 +11,6 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
-from zenml.integrations.mlflow.materializers.mlflow_materializer import (  # noqa
-    MLFlowPredictorMaterializer,
+from zenml.integrations.mlflow.services.mlflow_deployment import (  # noqa
+    MLFlowDeploymentService,
 )

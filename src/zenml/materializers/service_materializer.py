@@ -15,7 +15,8 @@
 import os
 from typing import Any, Type
 
-from zenml.integrations.mlflow.mlflow_predictor import MLFlowPredictionService
+from zenml.services.base_service import BaseService
+from zenml.services.service_registry import ServiceRegistry
 from zenml.artifacts import ServiceArtifact
 from zenml.io import fileio
 from zenml.materializers.base_materializer import BaseMaterializer
@@ -23,37 +24,36 @@ from zenml.materializers.base_materializer import BaseMaterializer
 SERVICE_CONFIG_FILENAME = "service.json"
 
 
-class MLFlowPredictorMaterializer(BaseMaterializer):
-    """Materializer to read/write MLflow prediction services."""
+class ServiceMaterializer(BaseMaterializer):
+    """Materializer to read/write service instances."""
 
-    ASSOCIATED_TYPES = (MLFlowPredictionService,)
+    ASSOCIATED_TYPES = (BaseService,)
     ASSOCIATED_ARTIFACT_TYPES = (ServiceArtifact,)
 
-    def handle_input(self, data_type: Type[Any]) -> MLFlowPredictionService:
-        """Creates and returns an MLflow prediction service instantiated from
-        the service configuration saved as artifact.
+    def handle_input(self, data_type: Type[Any]) -> BaseService:
+        """Creates and returns a service instantiated from the serialized
+        service configuration and last known status information saved as
+        artifact.
 
         Returns:
-            An MLflow prediction service.
+            A ZenML service instance.
         """
         super().handle_input(data_type)
         filepath = os.path.join(self.artifact.uri, SERVICE_CONFIG_FILENAME)
-        with fileio.open(filepath, "rb") as f:
-            service = MLFlowPredictionService.from_json(f.read())
+        with fileio.open(filepath, "r") as f:
+            service = ServiceRegistry().load_service_from_json(f.read())
         return service
 
-    def handle_return(self, service: MLFlowPredictionService) -> None:
-        """Writes an MLflow prediction service.
+    def handle_return(self, service: BaseService) -> None:
+        """Writes a ZenML service.
 
-        The configuration of the input MLflow prediction service instance is
-        serialized and saved as an artifact. The configuration can be loaded
-        later on and used to create a new MLflow prediction service instance
-        that is equivalent with the input one.
+        The configuration and last known status of the input service instance
+        are serialized and saved as an artifact.
 
         Args:
-            service: An MLflow prediction service instance.
+            service: A ZenML service instance.
         """
         super().handle_return(service)
         filepath = os.path.join(self.artifact.uri, SERVICE_CONFIG_FILENAME)
-        with fileio.open(filepath, "wb") as f:
+        with fileio.open(filepath, "w") as f:
             f.write(service.to_json())

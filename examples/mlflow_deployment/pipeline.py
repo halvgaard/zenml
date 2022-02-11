@@ -26,9 +26,9 @@ from zenml.integrations.mlflow.mlflow_environment import (
 from zenml.pipelines import pipeline
 from zenml.steps import BaseStepConfig, Output, step
 
-from zenml.integrations.mlflow.mlflow_predictor import (
-    MLFlowPredictionService,
-    MLFlowPredictionServiceConfig,
+from zenml.integrations.mlflow.services.mlflow_deployment import (
+    MLFlowDeploymentService,
+    MLFlowDeploymentConfig,
 )
 
 # Path to a pip requirements file that contains requirements necessary to run
@@ -117,7 +117,7 @@ def tf_evaluator(
 # Define the step and enable mlflow - order of decorators is important here
 @enable_mlflow
 @step
-def predictor(model: tf.keras.Model) -> MLFlowPredictionService:
+def predictor(model: tf.keras.Model) -> MLFlowDeploymentService:
     """Start a prediction service
 
     NOTE: the input argument is just a dummy that allows us to enforce that
@@ -125,30 +125,45 @@ def predictor(model: tf.keras.Model) -> MLFlowPredictionService:
     model is found in the current MLflow run.
     """
 
-    predictor_cfg = MLFlowPredictionServiceConfig(
+    predictor_cfg = MLFlowDeploymentConfig(
         model_uri=mlflow.get_artifact_uri("model"),
         workers=3,
         mlserver=False,
     )
 
-    service = MLFlowPredictionService(
+    service = MLFlowDeploymentService(
         config=predictor_cfg,
     )
 
-    # service.start()
-    service.start_daemon(wait_active_timeout=10)
+    service.start(timeout=10)
 
     return service
 
 
 @step
 def batch_inference(
-    service: MLFlowPredictionService,
+    service: MLFlowDeploymentService,
     batch: np.ndarray,
 ) -> Output(predictions=np.ndarray):
     """Run a batch inference request against a prediction service"""
 
-    return service.predict(batch)
+    # service.start(timeout=10) # should be a NOP but isn't currently
+
+    predictions = service.predict(batch)
+    predictions = predictions.argmax(axis=-1)
+    service.stop(timeout=10)
+
+    return predictions
+
+
+@step
+def inference_evaluator(
+    predictions: np.ndarray,
+    expectations: np.ndarray,
+) -> float:
+    """Evaluate the predictions against the expectations"""
+    comparison = predictions == expectations
+    return np.count_nonzero(comparison) / len(comparison)
 
 
 @pipeline(enable_cache=False, requirements_file=requirements_file)
@@ -159,6 +174,7 @@ def mlflow_example_pipeline(
     evaluator,
     predictor,
     batch_inference,
+    inference_evaluator,
 ):
     # Link all the steps artifacts together
     x_train, y_train, x_test, y_test = importer()
@@ -166,4 +182,5 @@ def mlflow_example_pipeline(
     model = trainer(x_train=x_trained_normed, y_train=y_train)
     evaluator(x_test=x_test_normed, y_test=y_test, model=model)
     service = predictor(model)
-    batch_inference(service, x_test)
+    predictions = batch_inference(service, x_test)
+    inference_evaluator(predictions, y_test)

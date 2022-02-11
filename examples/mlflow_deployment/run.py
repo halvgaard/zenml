@@ -20,6 +20,8 @@ from pipeline import (
     tf_trainer,
     tf_evaluator,
     predictor,
+    batch_inference,
+    inference_evaluator,
 )
 
 if __name__ == "__main__":
@@ -31,6 +33,8 @@ if __name__ == "__main__":
         trainer=tf_trainer(config=TrainerConfig(epochs=5, lr=0.0003)),
         evaluator=tf_evaluator(),
         predictor=predictor(),
+        batch_inference=batch_inference(),
+        inference_evaluator=inference_evaluator(),
     )
 
     run_1.run()
