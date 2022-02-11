@@ -147,7 +147,7 @@ def batch_inference(
 ) -> Output(predictions=np.ndarray):
     """Run a batch inference request against a prediction service"""
 
-    # service.start(timeout=10) # should be a NOP but isn't currently
+    service.start(timeout=10)  # should be a NOP
 
     predictions = service.predict(batch)
     predictions = predictions.argmax(axis=-1)

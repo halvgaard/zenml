@@ -599,6 +599,9 @@ class BaseService(metaclass=BaseServiceMeta):
         )
 
     def start(self, timeout: int) -> None:
+        """Starts the service."""
+        if not ServiceRegistry().service_is_registered(self.config.uuid):
+            ServiceRegistry().register_service(self)
         self.admin_state = ServiceState.ACTIVE
         self.provision()
         self.poll_service_status(timeout)
