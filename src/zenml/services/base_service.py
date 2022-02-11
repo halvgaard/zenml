@@ -43,6 +43,7 @@ class ServiceConfig(BaseModel):
     """Generic service configuration.
 
     Attributes:
+        name: unique name for the service instance
         description: description of the service
         uuid: unique identifier for the service
     """
@@ -109,7 +110,7 @@ class ServiceEndpointConfig(BaseModel):
         description: description of the service endpoint
     """
 
-    name: str
+    name: Optional[str]
     description: Optional[str]
 
 
@@ -174,9 +175,6 @@ class BaseServiceEndpointHealthMonitor(ABC):
             optional error message, if an error is encountered while checking
             the service endpoint status.
         """
-        # dummy base implementation: assume operational state always
-        # matches the admin state
-        return endpoint.admin_state, None
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize the endpoint monitor configuration in JSON-able
@@ -246,6 +244,7 @@ class BaseServiceEndpoint(ABC):
         config: ServiceEndpointConfig,
         monitor: Optional[BaseServiceEndpointHealthMonitor] = None,
     ) -> None:
+        config.name = config.name or self.__class__.__name__
         self.config = config
         self.monitor = monitor
         self.status = self.STATUS_TYPE()
@@ -271,7 +270,17 @@ class BaseServiceEndpoint(ABC):
         endpoint and update the local operational status information to reflect
         it.
         """
+        logger.debug(
+            "Running health check for service endpoint '%s' ...",
+            self.config.name,
+        )
         state, err = self.check_status()
+        logger.debug(
+            "Health check results for service endpoint '%s': %s [%s]",
+            self.config.name,
+            state.name,
+            err,
+        )
         self.status.update_state(state, err)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -385,6 +394,7 @@ class BaseService(metaclass=BaseServiceMeta):
         config: ServiceConfig,
         endpoint: Optional[BaseServiceEndpoint] = None,
     ) -> None:
+        config.name = config.name or self.__class__.__name__
         self.config = config
         self.status = self.STATUS_TYPE()
         # TODO [LOW]: allow for a service to track multiple endpoints
@@ -414,9 +424,6 @@ class BaseService(metaclass=BaseServiceMeta):
             message, if an error is encountered while checking the service
             status.
         """
-        # dummy base implementation: assume service operational state always
-        # matches the admin state
-        return self.admin_state, None
 
     def update_status(self) -> None:
         """Check the the current operational state of the external service
@@ -425,8 +432,23 @@ class BaseService(metaclass=BaseServiceMeta):
         This method should be overridden by subclasses that implement
         concrete service status tracking functionality.
         """
+        logger.debug(
+            "Running status check for service '%s' ...",
+            self.config.name,
+        )
         state, err = self.check_status()
+        logger.debug(
+            "Status check results for service '%s': %s [%s]",
+            self.config.name,
+            state.name,
+            err,
+        )
         self.status.update_state(state, err)
+
+        # don't bother checking the endpoint state if the service is not active
+        if self.status.state == ServiceState.INACTIVE:
+            return
+
         if self.endpoint:
             self.endpoint.update_status()
 

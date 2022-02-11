@@ -30,8 +30,6 @@ class MLFlowDeploymentEndpointConfig(LocalDaemonServiceEndpointConfig):
         prediction_uri_path: URI subpath for prediction requests
     """
 
-    name: str = "MLFlow Deployment Endpoint"
-    protocol: ServiceEndpointProtocol = ServiceEndpointProtocol.HTTP
     prediction_uri_path: Optional[str]
 
 
@@ -46,6 +44,7 @@ class MLFlowDeploymentEndpoint(LocalDaemonServiceEndpoint):
         config: MLFlowDeploymentEndpointConfig,
         monitor: Optional[HttpEndpointHealthMonitor] = None,
     ) -> None:
+        config.protocol = ServiceEndpointProtocol.HTTP
         if not monitor:
             monitor = HttpEndpointHealthMonitor(
                 HttpEndpointHealthMonitorConfig(
@@ -155,5 +154,4 @@ class MLFlowDeploymentService(LocalDaemonService):
             json={"instances": request.tolist()},
         )
         response.raise_for_status()
-        logger.debug(response.json())
         return np.array(response.json())

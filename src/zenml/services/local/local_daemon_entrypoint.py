@@ -15,29 +15,10 @@
 import click
 
 import os
-
-from zenml.integrations.registry import integration_registry
-from zenml.logger import get_logger
-from zenml.services import ServiceRegistry
+import pathlib
 
 
-logger = get_logger(__name__)
-
-
-try:
-    from os import closerange
-except ImportError:
-
-    def closerange(fd_low, fd_high):
-        # Iterate through and close all file descriptors.
-        for fd in range(fd_low, fd_high):
-            try:
-                os.close(fd)
-            except OSError:  # ERROR, fd wasn't open to begin with (ignored)
-                pass
-
-
-def daemonize(name: str, suppress_logging: bool, log_file: str):
+def daemonize(log_file: str):
     """Standard daemonization of a process."""
 
     # os.setpgrp()
@@ -52,48 +33,62 @@ def daemonize(name: str, suppress_logging: bool, log_file: str):
 
     # os.umask(0o22)
 
-    # In both the following any file descriptors above stdin
-    # stdout and stderr are left untouched. The inheritance
-    # option simply allows one to have output go to a file
-    # specified by way of shell redirection when not wanting
-    # to use --error-log option.
-
     # procname.setprocname(name)
 
-    if suppress_logging or log_file:
-        # Remap all of stdin, stdout and stderr on to
-        # the specified log file or /dev/null.
+    # Remap all of stdin, stdout and stderr on to
+    # the specified log file or /dev/null.
 
-        devnull = getattr(os, "devnull", "/dev/null")
-        log_file = log_file or devnull
+    devnull = getattr(os, "devnull", "/dev/null")
 
-        closerange(0, 3)
+    if log_file:
+        pathlib.Path(log_file).touch()
+    log_file = log_file or devnull
 
-        fd_log = os.open(log_file, os.O_RDWR)
+    os.closerange(0, 3)
 
-        if fd_log != 0:
-            os.dup2(fd_log, 0)
+    # TODO: close logfile on exit
+    fd_log = os.open(log_file, os.O_RDWR)
 
-        os.dup2(fd_log, 1)
-        os.dup2(fd_log, 2)
+    if fd_log != 0:
+        os.dup2(fd_log, 0)
+
+    os.dup2(fd_log, 1)
+    os.dup2(fd_log, 2)
 
 
-@click.command()
-@click.option("--config-file", required=True, type=click.Path(exists=True))
-@click.option("--suppress-logging", required=False, default=False, is_flag=True)
-@click.option("--log-file", required=False, type=click.Path())
-def run(config_file: str, suppress_logging: bool, log_file: str) -> None:
-    # same code as materializer
-    logger.info("Loading service daemon configuration from %s", config_file)
-    with open(config_file, "r") as f:
+def launch_service(service_config_file: str):
+    """Instantiate and launch a ZenML local service from its
+    configuration file.
+    """
+
+    # doing zenml imports here to avoid polluting the stdout/sterr
+    # with messages before daemonization is complete
+    from zenml.integrations.registry import integration_registry
+    from zenml.logger import get_logger
+    from zenml.services import ServiceRegistry
+
+    logger = get_logger(__name__)
+
+    logger.info(
+        "Loading service daemon configuration from %s", service_config_file
+    )
+    with open(service_config_file, "r") as f:
         config = f.read()
 
     integration_registry.activate_integrations()
 
+    logger.debug("Running service daemon with configuration:\n %s", config)
     service = ServiceRegistry().load_service_from_json(config)
-
-    daemonize(service.config.name, suppress_logging, log_file)
     service.run()
+
+
+@click.command()
+@click.option("--config-file", required=True, type=click.Path(exists=True))
+@click.option("--log-file", required=False, type=click.Path())
+def run(config_file: str, log_file: str) -> None:
+
+    daemonize(log_file)
+    launch_service(config_file)
 
 
 if __name__ == "__main__":
