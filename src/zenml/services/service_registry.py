@@ -29,7 +29,7 @@ from uuid import UUID
 logger = get_logger(__name__)
 
 if TYPE_CHECKING:
-    from zenml.services.base_service import BaseService
+    from zenml.services.service import BaseService
 
 
 class ServiceRegistry(metaclass=SingletonMetaClass):

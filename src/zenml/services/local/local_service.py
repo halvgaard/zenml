@@ -28,22 +28,28 @@ from typing import Any, Dict, List, Optional, Tuple
 import signal
 import sys
 
-from zenml.services.base_service import (
-    ServiceState,
+from zenml.services.service import (
     ServiceConfig,
-    ServiceStatus,
+    BaseService,
+)
+from zenml.services.service_endpoint import (
+    BaseServiceEndpoint,
     ServiceEndpointProtocol,
     ServiceEndpointConfig,
     ServiceEndpointStatus,
-    BaseServiceEndpoint,
-    BaseService,
+)
+
+from zenml.services.service_monitor import (
     ServiceEndpointHealthMonitorConfig,
     BaseServiceEndpointHealthMonitor,
 )
 
+from zenml.services.service_status import (
+    ServiceState,
+    ServiceStatus,
+)
 
-from zenml.utils.enum_utils import StrEnum
-from zenml.logger import LOG_FILE, get_logger
+from zenml.logger import get_logger
 
 logger = get_logger(__name__)
 

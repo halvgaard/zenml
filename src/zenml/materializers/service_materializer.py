@@ -15,7 +15,7 @@
 import os
 from typing import Any, Type
 
-from zenml.services.base_service import BaseService
+from zenml.services.service import BaseService
 from zenml.services.service_registry import ServiceRegistry
 from zenml.artifacts import ServiceArtifact
 from zenml.io import fileio

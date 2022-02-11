@@ -21,17 +21,30 @@ ZenML supports a local orchestrator out of the box which allows you to run your
 pipelines in a local environment. We also support using Apache Airflow as the
 orchestrator to handle the steps of your pipeline.
 """
-from zenml.services.base_service import (
-    ServiceState,
+from zenml.services.service import (
     ServiceConfig,
-    ServiceStatus,
+    BaseService,
+)
+
+from zenml.services.service_endpoint import (
     ServiceEndpointProtocol,
     ServiceEndpointConfig,
     ServiceEndpointStatus,
     BaseServiceEndpoint,
-    BaseService,
+)
+
+from zenml.services.service_monitor import (
     ServiceEndpointHealthMonitorConfig,
     BaseServiceEndpointHealthMonitor,
+)
+
+from zenml.services.service_registry import ServiceRegistry
+
+from zenml.services.service_type import ServiceType
+
+from zenml.services.service_status import (
+    ServiceState,
+    ServiceStatus,
 )
 
 from zenml.services.local.local_service import (
@@ -47,8 +60,6 @@ from zenml.services.local.local_service import (
     LocalDaemonServiceEndpoint,
 )
 
-from zenml.services.service_registry import ServiceRegistry
-from zenml.services.service_type import ServiceType
 
 __all__ = [
     "ServiceState",
