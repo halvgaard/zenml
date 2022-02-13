@@ -12,15 +12,9 @@
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
 """
-An orchestrator is a special kind of backend that manages the running of each
-step of the pipeline. Orchestrators administer the actual pipeline runs. You can
-think of it as the 'root' of any pipeline job that you run during your
-experimentation.
-
-ZenML supports a local orchestrator out of the box which allows you to run your
-pipelines in a local environment. We also support using Apache Airflow as the
-orchestrator to handle the steps of your pipeline.
+A service is a process or set of processes that outlive a pipeline run.
 """
+
 from zenml.services.service import (
     ServiceConfig,
     BaseService,
@@ -36,6 +30,10 @@ from zenml.services.service_endpoint import (
 from zenml.services.service_monitor import (
     ServiceEndpointHealthMonitorConfig,
     BaseServiceEndpointHealthMonitor,
+    HttpEndpointHealthMonitorConfig,
+    HttpEndpointHealthMonitor,
+    TCPEndpointHealthMonitorConfig,
+    TCPEndpointHealthMonitor,
 )
 
 from zenml.services.service_registry import ServiceRegistry
@@ -48,18 +46,16 @@ from zenml.services.service_status import (
 )
 
 from zenml.services.local.local_service import (
-    HttpEndpointHealthMonitorConfig,
-    HttpEndpointHealthMonitor,
-    TCPEndpointHealthMonitorConfig,
-    TCPEndpointHealthMonitor,
     LocalDaemonService,
     LocalDaemonServiceConfig,
     LocalDaemonServiceStatus,
+)
+
+from zenml.services.local.local_service_endpoint import (
     LocalDaemonServiceEndpointConfig,
     LocalDaemonServiceEndpointStatus,
     LocalDaemonServiceEndpoint,
 )
-
 
 __all__ = [
     "ServiceState",
