@@ -12,10 +12,12 @@
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
 
-from pydantic import BaseModel
 from typing import Optional
-from zenml.utils.enum_utils import StrEnum
+
+from pydantic import BaseModel
+
 from zenml.logger import get_logger
+from zenml.utils.enum_utils import StrEnum
 
 logger = get_logger(__name__)
 

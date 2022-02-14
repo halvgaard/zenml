@@ -15,47 +15,34 @@
 A service is a process or set of processes that outlive a pipeline run.
 """
 
-from zenml.services.service import (
-    ServiceConfig,
-    BaseService,
-)
-
-from zenml.services.service_endpoint import (
-    ServiceEndpointProtocol,
-    ServiceEndpointConfig,
-    ServiceEndpointStatus,
-    BaseServiceEndpoint,
-)
-
-from zenml.services.service_monitor import (
-    ServiceEndpointHealthMonitorConfig,
-    BaseServiceEndpointHealthMonitor,
-    HttpEndpointHealthMonitorConfig,
-    HttpEndpointHealthMonitor,
-    TCPEndpointHealthMonitorConfig,
-    TCPEndpointHealthMonitor,
-)
-
-from zenml.services.service_registry import ServiceRegistry
-
-from zenml.services.service_type import ServiceType
-
-from zenml.services.service_status import (
-    ServiceState,
-    ServiceStatus,
-)
-
 from zenml.services.local.local_service import (
     LocalDaemonService,
     LocalDaemonServiceConfig,
     LocalDaemonServiceStatus,
 )
-
 from zenml.services.local.local_service_endpoint import (
+    LocalDaemonServiceEndpoint,
     LocalDaemonServiceEndpointConfig,
     LocalDaemonServiceEndpointStatus,
-    LocalDaemonServiceEndpoint,
 )
+from zenml.services.service import BaseService, ServiceConfig
+from zenml.services.service_endpoint import (
+    BaseServiceEndpoint,
+    ServiceEndpointConfig,
+    ServiceEndpointProtocol,
+    ServiceEndpointStatus,
+)
+from zenml.services.service_monitor import (
+    BaseServiceEndpointHealthMonitor,
+    HttpEndpointHealthMonitor,
+    HttpEndpointHealthMonitorConfig,
+    ServiceEndpointHealthMonitorConfig,
+    TCPEndpointHealthMonitor,
+    TCPEndpointHealthMonitorConfig,
+)
+from zenml.services.service_registry import ServiceRegistry
+from zenml.services.service_status import ServiceState, ServiceStatus
+from zenml.services.service_type import ServiceType
 
 __all__ = [
     "ServiceState",

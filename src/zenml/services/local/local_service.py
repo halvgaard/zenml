@@ -12,33 +12,23 @@
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
 
-from abc import abstractmethod
-
 import os
 import pathlib
-import psutil
-
+import signal
 import subprocess
-
+import sys
 import tempfile
+from abc import abstractmethod
 from typing import Dict, Optional, Tuple
 
-import signal
-import sys
+import psutil
+
+from zenml.logger import get_logger
 from zenml.services.local.local_service_endpoint import (
     LocalDaemonServiceEndpoint,
 )
-from zenml.services.service import (
-    ServiceConfig,
-    BaseService,
-)
-
-from zenml.services.service_status import (
-    ServiceState,
-    ServiceStatus,
-)
-
-from zenml.logger import get_logger
+from zenml.services.service import BaseService, ServiceConfig
+from zenml.services.service_status import ServiceState, ServiceStatus
 
 logger = get_logger(__name__)
 

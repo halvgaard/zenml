@@ -14,21 +14,16 @@
 
 
 import socket
-
 from typing import Optional
 
+from zenml.logger import get_logger
 from zenml.services.service_endpoint import (
     BaseServiceEndpoint,
-    ServiceEndpointProtocol,
     ServiceEndpointConfig,
+    ServiceEndpointProtocol,
     ServiceEndpointStatus,
 )
-
-from zenml.services.service_monitor import (
-    HttpEndpointHealthMonitor,
-)
-
-from zenml.logger import get_logger
+from zenml.services.service_monitor import HttpEndpointHealthMonitor
 
 logger = get_logger(__name__)
 
@@ -58,6 +53,7 @@ class LocalDaemonServiceEndpointStatus(ServiceEndpointStatus):
 
     Attributes:
     """
+
     ...
 
 

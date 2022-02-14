@@ -1,21 +1,20 @@
-from mlflow.pyfunc.backend import PyFuncBackend  # type: ignore
+from typing import Optional
 
 import numpy as np
-from pydantic import BaseModel
 import requests  # type: ignore
-from typing import Optional
+from mlflow.pyfunc.backend import PyFuncBackend  # type: ignore
+
 from zenml.logger import get_logger
 from zenml.services import (
-    LocalDaemonServiceConfig,
-    LocalDaemonService,
-    LocalDaemonServiceEndpointConfig,
-    LocalDaemonServiceEndpoint,
-    ServiceEndpointProtocol,
-    HttpEndpointHealthMonitorConfig,
     HttpEndpointHealthMonitor,
+    HttpEndpointHealthMonitorConfig,
+    LocalDaemonService,
+    LocalDaemonServiceConfig,
+    LocalDaemonServiceEndpoint,
+    LocalDaemonServiceEndpointConfig,
+    ServiceEndpointProtocol,
     ServiceType,
 )
-
 
 logger = get_logger(__name__)
 
@@ -132,7 +131,6 @@ class MLFlowDeploymentService(LocalDaemonService):
             logger.info(
                 "MLflow prediction service stopped. Resuming normal execution."
             )
-            pass
 
     def predict(self, request: np.ndarray) -> np.ndarray:
         """Make a prediction using the service.

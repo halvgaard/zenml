@@ -12,20 +12,20 @@
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
 
-from abc import ABCMeta, abstractmethod
-
 import json
-from pydantic import BaseModel, Field
 import time
+from abc import ABCMeta, abstractmethod
 from typing import Any, Dict, Optional, Tuple, Type, cast
+from uuid import UUID, uuid4
 
+from pydantic import BaseModel, Field
+
+from zenml.logger import get_logger
 from zenml.services.service_endpoint import BaseServiceEndpoint
 from zenml.services.service_registry import ServiceRegistry
 from zenml.services.service_status import ServiceState, ServiceStatus
 from zenml.services.service_type import ServiceType
 from zenml.utils.yaml_utils import UUIDEncoder
-from zenml.logger import get_logger
-from uuid import UUID, uuid4
 
 logger = get_logger(__name__)
 
@@ -267,9 +267,8 @@ class BaseService(metaclass=BaseServiceMeta):
             f"Provisioning resources not implemented for {self}."
         )
 
-    def deprovision(self) -> None:
-        """Deprovisions all resources used by the service after the service is
-        shut down."""
+    def deprovision(self, force: Optional[bool] = False) -> None:
+        """Deprovisions all resources used by the service."""
         raise NotImplementedError(
             f"Deprovisioning resources not implemented for {self}."
         )
@@ -301,10 +300,10 @@ class BaseService(metaclass=BaseServiceMeta):
 
     def __repr__(self) -> str:
         """String representation of the service."""
-        _repr = self.to_json()
+        service_type = self.type()
         return (
-            f"{self.__class__.__qualname__}(type={self.type}, "
-            f"flavor={self.flavor}, {_repr})"
+            f"{self.__class__.__qualname__}(type={service_type.type}, "
+            f"flavor={service_type.flavor}, uuid={self.config.uuid})"
         )
 
     def __str__(self) -> str:

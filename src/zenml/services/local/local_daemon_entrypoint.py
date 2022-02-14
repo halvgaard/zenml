@@ -13,6 +13,7 @@
 #  permissions and limitations under the License.
 
 import click
+
 from zenml.utils.daemonizer import daemonize
 
 
@@ -31,7 +32,7 @@ def run(config_file: str, log_file: str, pid_file: str) -> None:
         # with messages before daemonization is complete
         from zenml.integrations.registry import integration_registry
         from zenml.logger import get_logger
-        from zenml.services import ServiceRegistry
+        from zenml.services import ServiceRegistry, LocalDaemonService
 
         logger = get_logger(__name__)
 
@@ -45,6 +46,10 @@ def run(config_file: str, log_file: str, pid_file: str) -> None:
 
         logger.debug("Running service daemon with configuration:\n %s", config)
         service = ServiceRegistry().load_service_from_json(config)
+        if not isinstance(service, LocalDaemonService):
+            raise TypeError(
+                f"Expected service type LocalDaemonService but got {type(service)} instead"
+            )
         service.run()
 
     launch_service(config_file)

@@ -14,12 +14,14 @@
 
 
 import os
-import pathlib
-import psutil
 import signal
-from typing import Any, Callable, Optional, TypeVar, Union, overload
+from typing import Any, Callable, Optional, TypeVar, Union, cast, overload
+
+import psutil
 
 CHILD_WAIT_TIMEOUT = 5
+
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 def terminate_children(signum: int, frame: Optional[Any] = None) -> None:
@@ -55,9 +57,6 @@ def terminate_children(signum: int, frame: Optional[Any] = None) -> None:
     _, alive = psutil.wait_procs(children, timeout=CHILD_WAIT_TIMEOUT)
 
 
-F = TypeVar("F", bound=Callable[..., Any])
-
-
 @overload
 def daemonize(
     _func: F,
@@ -68,7 +67,7 @@ def daemonize(
 
 @overload
 def daemonize(
-    *, log_file: Optional[str], pid_file: Optional[str]
+    *, log_file: Optional[str] = None, pid_file: Optional[str] = None
 ) -> Callable[[F], F]:
     """Type annotations for deamonizer decorator in case of arguments."""
     ...
@@ -77,8 +76,8 @@ def daemonize(
 def daemonize(
     _func: Optional[F] = None,
     *,
-    log_file: Optional[str],
-    pid_file: Optional[str]
+    log_file: Optional[str] = None,
+    pid_file: Optional[str] = None
 ) -> Union[F, Callable[[F], F]]:
     """Decorator that executes the input function as a daemon process.
 
@@ -105,8 +104,9 @@ def daemonize(
             """
             pid = os.fork()
             if pid:
-                with open(pid_file, "w+") as fd_pid:
-                    fd_pid.write(str(pid))
+                if pid_file:
+                    with open(pid_file, "w+") as fd_pid:
+                        fd_pid.write(str(pid))
                 return pid
 
             os.umask(0o22)
@@ -132,7 +132,7 @@ def daemonize(
 
             return 0
 
-        return daemon
+        return cast(F, daemon)
 
     if _func is None:
         return inner_decorator

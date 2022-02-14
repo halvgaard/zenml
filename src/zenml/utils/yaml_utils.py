@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 from uuid import UUID
+
 import yaml
 
 import zenml.io.utils
@@ -109,7 +110,7 @@ def read_json(file_path: str) -> Any:
 
 
 class UUIDEncoder(json.JSONEncoder):
-    def default(self, obj):
+    def default(self, obj: Any) -> Any:
         if isinstance(obj, UUID):
             # if the obj is uuid, we simply return the value of uuid
             return obj.hex

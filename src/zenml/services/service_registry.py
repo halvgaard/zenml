@@ -13,18 +13,12 @@
 #  permissions and limitations under the License.
 
 import json
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Optional,
-    Type,
-)
+from typing import TYPE_CHECKING, Any, Dict, Optional, Type
+from uuid import UUID
 
 from zenml.logger import get_logger
 from zenml.services.service_type import ServiceType
 from zenml.utils.singleton import SingletonMetaClass
-from uuid import UUID
 
 logger = get_logger(__name__)
 
@@ -109,7 +103,7 @@ class ServiceRegistry(metaclass=SingletonMetaClass):
                 f"'{service.config.name}' of type {service_type}."
             )
 
-    def get_service(self, uuid: UUID) -> Optional[Type["BaseService"]]:
+    def get_service(self, uuid: UUID) -> Optional["BaseService"]:
         """Get the service instance registered for a UUID.
 
         Args:

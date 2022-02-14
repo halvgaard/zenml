@@ -12,13 +12,13 @@
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
 
-from abc import ABC, abstractmethod
-
 import json
-from pydantic import BaseModel
-import requests  # type: ignore
 import socket
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+
+import requests  # type: ignore
+from pydantic import BaseModel
 
 from zenml.logger import get_logger
 from zenml.services.service_status import ServiceState
@@ -142,6 +142,7 @@ class HttpEndpointHealthMonitor(BaseServiceEndpointHealthMonitor):
         config: HttpEndpointHealthMonitorConfig,
     ) -> None:
         super().__init__(config)
+        self.config = config
 
     def get_healthcheck_uri(
         self, endpoint: "BaseServiceEndpoint"
@@ -193,6 +194,7 @@ class HttpEndpointHealthMonitor(BaseServiceEndpointHealthMonitor):
 
 class TCPEndpointHealthMonitorConfig(ServiceEndpointHealthMonitorConfig):
     """TCP service endpoint health monitor configuration."""
+
     ...
 
 
@@ -232,8 +234,8 @@ class TCPEndpointHealthMonitor(BaseServiceEndpointHealthMonitor):
             optional error message, if an error is encountered while checking
             the TCP endpoint status.
         """
-        if not endpoint.status.port:
-            return ServiceState.ERROR, "no TCP port information available"
+        if not endpoint.status.port or not endpoint.status.hostname:
+            return ServiceState.ERROR, "TCP port and hostname values are not known"
 
         logger.debug(
             "Running TCP healthcheck for TCP port: %d", endpoint.status.port

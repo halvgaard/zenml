@@ -12,8 +12,9 @@
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
 
-from pydantic import BaseModel
 from typing import Optional
+
+from pydantic import BaseModel
 
 
 class ServiceType(BaseModel):

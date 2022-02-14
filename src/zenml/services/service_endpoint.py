@@ -12,11 +12,11 @@
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
 
-from abc import ABC
-
 import json
-from pydantic import BaseModel
+from abc import ABC
 from typing import Any, Dict, Optional, Tuple
+
+from pydantic import BaseModel
 
 from zenml.logger import get_logger
 from zenml.services.service_monitor import BaseServiceEndpointHealthMonitor
@@ -69,9 +69,9 @@ class ServiceEndpointStatus(ServiceStatus):
             The URI of the service endpoint or None, if the service endpoint
             operational status doesn't have the required information.
         """
-        if not self.hostname or not self.port:
+        if not self.hostname or not self.port or not self.protocol:
             # the service is not yet in a state in which the endpoint hostname
-            # and port are known
+            # port and protocol are known
             return None
 
         return f"{self.protocol.value}://{self.hostname}:{self.port}"

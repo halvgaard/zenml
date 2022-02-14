@@ -15,11 +15,11 @@
 import os
 from typing import Any, Type
 
-from zenml.services.service import BaseService
-from zenml.services.service_registry import ServiceRegistry
 from zenml.artifacts import ServiceArtifact
 from zenml.io import fileio
 from zenml.materializers.base_materializer import BaseMaterializer
+from zenml.services.service import BaseService
+from zenml.services.service_registry import ServiceRegistry
 
 SERVICE_CONFIG_FILENAME = "service.json"
 

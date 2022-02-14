@@ -23,11 +23,7 @@ from mlflow import (  # type: ignore
     set_tracking_uri,
     start_run,
 )
-
-from mlflow.entities import (  # type: ignore
-    Experiment,
-    Run,
-)
+from mlflow.entities import Experiment, Run  # type: ignore
 
 from zenml.environment import BaseEnvironmentComponent
 from zenml.logger import get_logger
@@ -151,7 +147,7 @@ class MLFlowStepEnvironment(BaseEnvironmentComponent):
         self._run_name = run_name
         self._run = None
 
-    def _create_or_reuse_mlflow_run(self):
+    def _create_or_reuse_mlflow_run(self) -> None:
         """Create or reuse an MLflow run for the current step.
 
         IMPORTANT: this function is not race condition proof. If two or more
@@ -165,6 +161,11 @@ class MLFlowStepEnvironment(BaseEnvironmentComponent):
         )
         set_experiment(self._experiment_name)
         self._experiment = get_experiment_by_name(self._experiment_name)
+        if self._experiment is None:
+            raise RuntimeError(
+                f"Failed to create or reuse MLflow "
+                f"experiment {self._experiment_name}"
+            )
         experiment_id = self._experiment.experiment_id
 
         # TODO [ENG-458]: find a solution to avoid race-conditions while creating
