@@ -131,9 +131,7 @@ def predictor(model: tf.keras.Model) -> MLFlowDeploymentService:
         mlserver=False,
     )
 
-    service = MLFlowDeploymentService(
-        config=predictor_cfg,
-    )
+    service = MLFlowDeploymentService(predictor_cfg)
 
     service.start(timeout=10)
 

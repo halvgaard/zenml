@@ -12,8 +12,6 @@
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
 
-from typing import Optional
-
 from pydantic import BaseModel
 
 
@@ -21,16 +19,16 @@ class ServiceType(BaseModel):
     """Service type descriptor.
 
     Attributes:
-        name: name of the service type
         type: service type
         flavor: service flavor
+        name: name of the service type
         description: description of the service type
     """
 
-    name: str
     type: str
     flavor: str
-    description: Optional[str]
+    name: str = ""
+    description: str = ""
 
     class Config:
         """Pydantic configuration class."""

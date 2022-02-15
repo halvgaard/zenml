@@ -32,7 +32,7 @@ def run(config_file: str, log_file: str, pid_file: str) -> None:
         # with messages before daemonization is complete
         from zenml.integrations.registry import integration_registry
         from zenml.logger import get_logger
-        from zenml.services import ServiceRegistry, LocalDaemonService
+        from zenml.services import LocalDaemonService, ServiceRegistry
 
         logger = get_logger(__name__)
 

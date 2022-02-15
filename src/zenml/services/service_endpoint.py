@@ -12,16 +12,15 @@
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
 
-import json
-from abc import ABC
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
-from pydantic import BaseModel
+from pydantic import Field
 
 from zenml.logger import get_logger
 from zenml.services.service_monitor import BaseServiceEndpointHealthMonitor
 from zenml.services.service_status import ServiceState, ServiceStatus
 from zenml.utils.enum_utils import StrEnum
+from zenml.utils.typed_model import BaseTypedModel
 
 logger = get_logger(__name__)
 
@@ -34,7 +33,7 @@ class ServiceEndpointProtocol(StrEnum):
     HTTPS = "https"
 
 
-class ServiceEndpointConfig(BaseModel):
+class ServiceEndpointConfig(BaseTypedModel):
     """Generic service endpoint configuration.
 
     Attributes:
@@ -42,8 +41,8 @@ class ServiceEndpointConfig(BaseModel):
         description: description of the service endpoint
     """
 
-    name: Optional[str]
-    description: Optional[str]
+    name: str = ""
+    description: str = ""
 
 
 class ServiceEndpointStatus(ServiceStatus):
@@ -57,7 +56,7 @@ class ServiceEndpointStatus(ServiceStatus):
         port: the current TCP port where the service endpoint is accessible
     """
 
-    protocol: Optional[ServiceEndpointProtocol] = ServiceEndpointProtocol.TCP
+    protocol: ServiceEndpointProtocol = ServiceEndpointProtocol.TCP
     hostname: Optional[str]
     port: Optional[int]
 
@@ -77,7 +76,7 @@ class ServiceEndpointStatus(ServiceStatus):
         return f"{self.protocol.value}://{self.hostname}:{self.port}"
 
 
-class BaseServiceEndpoint(ABC):
+class BaseServiceEndpoint(BaseTypedModel):
     """Base service class
 
     This class implements generic functionality concerning the life-cycle
@@ -85,34 +84,34 @@ class BaseServiceEndpoint(ABC):
     API or generic TCP endpoint exposed by a service).
     """
 
-    STATUS_TYPE = ServiceEndpointStatus
-    CONFIG_TYPE = ServiceEndpointConfig
-    MONITOR_TYPE = BaseServiceEndpointHealthMonitor
+    admin_state: ServiceState = ServiceState.INACTIVE
+    config: ServiceEndpointConfig = Field(default_factory=ServiceEndpointConfig)
+    status: ServiceEndpointStatus = Field(default_factory=ServiceEndpointStatus)
+    # TODO [MEDIUM] allow multiple monitors per endpoint
+    monitor: Optional[BaseServiceEndpointHealthMonitor]
 
     def __init__(
         self,
-        config: ServiceEndpointConfig,
-        monitor: Optional[BaseServiceEndpointHealthMonitor] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
-        config.name = config.name or self.__class__.__name__
-        self.config = config
-        self.monitor = monitor
-        self.status = self.STATUS_TYPE()
-        self.admin_state = ServiceState.INACTIVE
+        super().__init__(*args, **kwargs)
+        self.config.name = self.config.name or self.__class__.__name__
 
-    def check_status(self) -> Tuple[ServiceState, Optional[str]]:
+    def check_status(self) -> Tuple[ServiceState, str]:
         """Check the the current operational state of the external
         service endpoint.
 
         Returns:
-            The operational state of the external service endpoint and an
-            optional error message, if an error is encountered while checking
-            the service endpoint status.
+            The operational state of the external service endpoint and a
+            message providing additional information about that state
+            (e.g. a description of the error, if one is encountered while
+            checking the service status).
         """
         if not self.monitor:
             # no health monitor configured; assume service operational state
             # always matches the admin state
-            return self.admin_state, None
+            return self.admin_state, ""
         return self.monitor.check_endpoint_status(self)
 
     def update_status(self) -> None:
@@ -132,71 +131,6 @@ class BaseServiceEndpoint(ABC):
             err,
         )
         self.status.update_state(state, err)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialize the service endpoint configuration and status in JSON-able
-        format.
-
-        Returns:
-            The service endpoint config and current status serialized as
-            JSON-able dict.
-        """
-        return dict(
-            config=self.config.dict(),
-            monitor=self.monitor.to_dict() if self.monitor else None,
-            status=self.status.dict(),
-        )
-
-    def to_json(self) -> str:
-        """Serialize the service endpoint configuration and status in JSON
-        format.
-
-        Returns:
-            The service endpoint config and current status serialized as JSON.
-        """
-        return json.dumps(self.to_dict(), indent=4)
-
-    @classmethod
-    def from_dict(
-        cls,
-        endpoint_dict: Dict[str, Any],
-    ) -> "BaseServiceEndpoint":
-        """Instantiate a service endpoint instance from a serialized JSON-able
-        dict representation containing service endpoint configuration and an
-        optional last known status.
-
-        Args:
-            endpoint_dict: the service endpoint config and optional last known
-            status serialized as JSON-able dict.
-
-        Returns:
-            A service endpoint instance created from the serialized configuration
-            and status.
-        """
-        config = endpoint_dict.get("config")
-        if config is not None:
-            config = cls.CONFIG_TYPE.parse_obj(config)
-        else:
-            config = cls.CONFIG_TYPE()
-        status = endpoint_dict.get("status")
-        if status is not None:
-            status = cls.STATUS_TYPE.parse_obj(status)
-        else:
-            config = cls.STATUS_TYPE()
-        monitor = endpoint_dict.get("monitor")
-        if monitor is not None:
-            monitor = cls.MONITOR_TYPE.from_dict(monitor)
-        endpoint = cls(config, monitor)
-        endpoint.status = status
-        return endpoint
-
-    @classmethod
-    def from_json(
-        cls,
-        json_str: str,
-    ) -> "BaseServiceEndpoint":
-        endpoint_dict = json.loads(json_str)
-        return cls.from_dict(endpoint_dict)
 
     def is_active(self) -> bool:
         self.update_status()

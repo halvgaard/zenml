@@ -43,14 +43,14 @@ class ServiceStatus(BaseModel):
         last_error: the error encountered during the last status update
     """
 
-    state: Optional[ServiceState] = ServiceState.INACTIVE
-    last_state: Optional[ServiceState] = ServiceState.INACTIVE
-    last_error: Optional[str]
+    state: ServiceState = ServiceState.INACTIVE
+    last_state: ServiceState = ServiceState.INACTIVE
+    last_error: str = ""
 
     def update_state(
         self,
-        new_state: Optional[ServiceState] = None,
-        error: Optional[str] = None,
+        new_state: Optional[ServiceState],
+        error: str = "",
     ) -> None:
         """Update the current operational state to reflect a new state
         value and/or error.
@@ -69,4 +69,4 @@ class ServiceStatus(BaseModel):
 
     def clear_error(self) -> None:
         """Clear the last error message."""
-        self.last_error = None
+        self.last_error = ""

@@ -19,9 +19,10 @@ import subprocess
 import sys
 import tempfile
 from abc import abstractmethod
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import psutil
+from pydantic import Field
 
 from zenml.logger import get_logger
 from zenml.services.local.local_service_endpoint import (
@@ -51,9 +52,9 @@ class LocalDaemonServiceConfig(ServiceConfig):
             to shut it down forcefully.
     """
 
-    silent_daemon: Optional[bool] = False
-    graceful_shutdown_signal: Optional[signal.Signals] = signal.SIGINT
-    forceful_shutdown_signal: Optional[signal.Signals] = signal.SIGKILL
+    silent_daemon: bool = False
+    graceful_shutdown_signal: signal.Signals = signal.SIGINT
+    forceful_shutdown_signal: signal.Signals = signal.SIGKILL
 
 
 class LocalDaemonServiceStatus(ServiceStatus):
@@ -68,10 +69,10 @@ class LocalDaemonServiceStatus(ServiceStatus):
     """
 
     runtime_path: Optional[str]
-    silent_daemon: Optional[bool]
+    silent_daemon: bool = False
 
     @property
-    def config_file(self) -> Optional[str]:
+    def config_file(self) -> str:
         """Get the path to the configuration file used to start the service
         daemon.
 
@@ -84,7 +85,7 @@ class LocalDaemonServiceStatus(ServiceStatus):
         return os.path.join(self.runtime_path, SERVICE_DAEMON_CONFIG_FILE_NAME)
 
     @property
-    def log_file(self) -> Optional[str]:
+    def log_file(self) -> str:
         """Get the path to the log file where the service output is/has been
         logged.
 
@@ -98,7 +99,7 @@ class LocalDaemonServiceStatus(ServiceStatus):
         return os.path.join(self.runtime_path, SERVICE_DAEMON_LOG_FILE_NAME)
 
     @property
-    def pid_file(self) -> Optional[str]:
+    def pid_file(self) -> str:
         """Get the path to the daemon PID file where the last known PID of the
         daemon process is stored.
 
@@ -133,37 +134,73 @@ class LocalDaemonService(BaseService):
     the life-cycle management and tracking of external services implemented as
     local daemon processes.
 
-    The default implementation is to launch a python wrapper that
-    instantiates the same LocalDaemonService object from the
-    serialized configuration and calls its `run` method.
+    To define a local daemon service, subclass this class and implement the
+    `run` method. Upon `start`, the service will spawn a daemon process that
+    ends up calling the `run` method.
+
+    Example:
+
+    ```python
+
+    from zenml.services import ServiceType, LocalDaemonService, LocalDaemonServiceConfig
+    import time
+
+    class SleepingDaemonConfig(LocalDaemonServiceConfig):
+
+        wake_up_after: int
+
+    class SleepingDaemon(LocalDaemonService):
+
+        SERVICE_TYPE = ServiceType(
+            name="sleeper",
+            description="Sleeping daemon",
+            type="daemon",
+            flavor="sleeping",
+        )
+        config: SleepingDaemonConfig
+
+        def run(self) -> None:
+            time.sleep(self.config.wake_up_after)
+
+    daemon = SleepingDaemon(config=SleepingDaemonConfig(wake_up_after=10))
+    daemon.start()
+    ```
+
+    NOTE: the `SleepingDaemon` class and its parent module have to be
+    discoverable as part of a ZenML `Integration`, otherwise the daemon will
+    fail with the following error:
+
+    ```
+    TypeError: Cannot load service with unregistered service type:
+    name='sleeper' type='daemon' flavor='sleeping' description='Sleeping daemon'
+    ```
     """
 
-    CONFIG_TYPE = LocalDaemonServiceConfig
-    STATUS_TYPE = LocalDaemonServiceStatus
-    ENDPOINT_TYPE = LocalDaemonServiceEndpoint
+    config: LocalDaemonServiceConfig = Field(
+        default_factory=LocalDaemonServiceConfig
+    )
+    status: LocalDaemonServiceStatus = Field(
+        default_factory=LocalDaemonServiceStatus
+    )
+    # TODO [MEDIUM] allow multiple endpoints per service
+    endpoint: Optional[LocalDaemonServiceEndpoint] = None
 
-    def __init__(
-        self,
-        config: LocalDaemonServiceConfig,
-        endpoint: Optional[LocalDaemonServiceEndpoint] = None,
-    ) -> None:
-        super().__init__(config, endpoint)
-
-    def check_status(self) -> Tuple[ServiceState, Optional[str]]:
+    def check_status(self) -> Tuple[ServiceState, str]:
         """Check the the current operational state of the daemon process.
 
         Returns:
-            The operational state of the daemon process and an optional error
-            message, if an error is encountered while checking its status.
+            The operational state of the daemon process and a message
+            providing additional information about that state (e.g. a
+            description of the error, if one is encountered).
         """
 
         if not self.status.pid:
             return ServiceState.INACTIVE, "service daemon is not running"
 
         # the daemon is running
-        return ServiceState.ACTIVE, None
+        return ServiceState.ACTIVE, ""
 
-    def _get_daemon_cmd(self) -> Tuple[Tuple[str], Dict[str, str]]:
+    def _get_daemon_cmd(self) -> Tuple[List[str], Dict[str, str]]:
         """Get the command to run to launch the service daemon.
 
         The default implementation provided by this class is the following:
@@ -195,7 +232,7 @@ class LocalDaemonService(BaseService):
         with open(self.status.config_file, "w") as f:
             f.write(self.to_json())
 
-        command = (
+        command = [
             sys.executable,
             "-m",
             daemon_entrypoint.__name__,
@@ -203,10 +240,10 @@ class LocalDaemonService(BaseService):
             self.status.config_file,
             "--pid-file",
             self.status.pid_file,
-        )
+        ]
         if self.status.log_file:
             pathlib.Path(self.status.log_file).touch()
-            command += ("--log-file", self.status.log_file)
+            command += ["--log-file", self.status.log_file]
 
         command_env = os.environ.copy()
         # command_env[_SERVER_MODEL_PATH] = local_uri
@@ -216,17 +253,17 @@ class LocalDaemonService(BaseService):
     def _start_daemon(self) -> None:
         """Start the service daemon process associated with this service."""
 
-        logger.info("Starting daemon for service '%s'...", self.config.name)
-
         pid = self.status.pid
         if pid:
             # service daemon is already running
             logger.debug(
                 "Daemon process for service '%s' is already running with PID %d",
-                self.config.name,
+                self,
                 pid,
             )
             return
+
+        logger.info("Starting daemon for service '%s'...", self)
 
         if self.endpoint:
             self.endpoint.prepare_for_start()
@@ -234,7 +271,7 @@ class LocalDaemonService(BaseService):
         command, command_env = self._get_daemon_cmd()
         logger.debug(
             "Running command to start daemon for service '%s': %s",
-            self.config.name,
+            self,
             " ".join(command),
         )
         p = subprocess.Popen(command, env=command_env)
@@ -243,31 +280,32 @@ class LocalDaemonService(BaseService):
         if pid:
             logger.debug(
                 "Daemon process for service '%s' started with PID: %d",
-                self.config.name,
+                self,
                 pid,
             )
         else:
             logger.error(
                 "Daemon process for service '%s' failed to start",
-                self.config.name,
+                self,
             )
 
-    def _stop_daemon(self, force: Optional[bool] = False) -> None:
+    def _stop_daemon(self, force: bool = False) -> None:
         """Stop the service daemon process associated with this service.
 
         Args:
             force: if True, the service daemon will be forcefully stopped
         """
-        logger.info("Stopping daemon for service '%s' ...", self.config.name)
 
         pid = self.status.pid
         if not pid:
             # service daemon is not running
             logger.debug(
                 "Daemon process for service '%s' no longer running",
-                self.config.name,
+                self,
             )
             return
+
+        logger.info("Stopping daemon for service '%s' ...", self)
 
         s = self.config.graceful_shutdown_signal
         if force:
@@ -275,14 +313,14 @@ class LocalDaemonService(BaseService):
         logger.debug(
             "Sending signal %s to daemon process for service '%s' to stop",
             s.name,
-            self.config.name,
+            self,
         )
         os.kill(pid, s)
 
     def provision(self) -> None:
         self._start_daemon()
 
-    def deprovision(self, force: Optional[bool] = False) -> None:
+    def deprovision(self, force: bool = False) -> None:
         self._stop_daemon(force)
 
     @abstractmethod

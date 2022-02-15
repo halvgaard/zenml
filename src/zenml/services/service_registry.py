@@ -39,7 +39,7 @@ class ServiceRegistry(metaclass=SingletonMetaClass):
         Args:
             cls: A BaseService subclass.
         """
-        service_type = cls.type()
+        service_type = cls.SERVICE_TYPE
         if service_type not in self.service_types:
             self.service_types[service_type] = cls
             logger.debug(
@@ -84,23 +84,19 @@ class ServiceRegistry(metaclass=SingletonMetaClass):
         Args:
             service: A BaseService instance.
         """
-        service_type = service.type()
+        service_type = service.SERVICE_TYPE
         if service_type not in self.service_types:
             raise TypeError("Service type <{service_type}> is not registered.")
 
-        if service.config.uuid not in self.services:
-            self.services[service.config.uuid] = service
-            logger.debug(
-                f"Registered service '{service.config.name}' of service type "
-                f"<{service_type}> with UUID {service.config.uuid}"
-            )
+        if service.uuid not in self.services:
+            self.services[service.uuid] = service
+            logger.debug(f"Registered service {service}")
         else:
-            existing_service = self.services[service.config.uuid]
+            existing_service = self.services[service.uuid]
             raise Exception(
-                f"Found existing service '{existing_service.config.name}' and "
-                f"service type {existing_service.type()} for UUID: "
-                f"{service.config.uuid}. Skipping registration for service "
-                f"'{service.config.name}' of type {service_type}."
+                f"Found existing service {existing_service} for UUID: "
+                f"{service.uuid}. Skipping registration for service "
+                f"{service}."
             )
 
     def get_service(self, uuid: UUID) -> Optional["BaseService"]:
@@ -138,7 +134,7 @@ class ServiceRegistry(metaclass=SingletonMetaClass):
         Returns:
             A new or existing ZenML service instance.
         """
-        service_type = service_dict.get("type")
+        service_type = service_dict.get("service_type")
         if not service_type:
             raise ValueError(
                 "Service type not present in the service dictionary"
@@ -146,18 +142,11 @@ class ServiceRegistry(metaclass=SingletonMetaClass):
         service_type = ServiceType.parse_obj(service_type)
         service_class = self.get_service_type(service_type)
         if not service_class:
-            raise TypeError(f"Unknown service type: {str(service_type)}")
-        service = service_class.from_dict(service_dict)
-        existing_service = self.get_service(service.config.uuid)
-        if existing_service:
-            # TODO: raise error if not the same type
-            logger.debug(
-                f"Reusing existing service '{existing_service.config.name}' "
-                f"of type {existing_service.type()} for UUID: "
-                f"{service.config.uuid}."
+            raise TypeError(
+                f"Cannot load service with unregistered service "
+                f"type: {service_type}"
             )
-            return existing_service
-        self.register_service(service)
+        service = service_class.from_dict(service_dict)
         return service
 
     def load_service_from_json(self, json_str: str) -> "BaseService":

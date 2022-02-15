@@ -14,23 +14,24 @@
 
 import json
 import time
-from abc import ABCMeta, abstractmethod
-from typing import Any, Dict, Optional, Tuple, Type, cast
+from abc import abstractmethod
+from typing import Any, ClassVar, Dict, Optional, Tuple, Type, cast
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from zenml.logger import get_logger
 from zenml.services.service_endpoint import BaseServiceEndpoint
 from zenml.services.service_registry import ServiceRegistry
 from zenml.services.service_status import ServiceState, ServiceStatus
 from zenml.services.service_type import ServiceType
+from zenml.utils.typed_model import BaseTypedModel, BaseTypedModelMeta
 from zenml.utils.yaml_utils import UUIDEncoder
 
 logger = get_logger(__name__)
 
 
-class ServiceConfig(BaseModel):
+class ServiceConfig(BaseTypedModel):
     """Generic service configuration.
 
     Attributes:
@@ -40,14 +41,23 @@ class ServiceConfig(BaseModel):
     """
 
     # TODO: pipeline metadata (name, run id, step etc)
-    name: Optional[str]
-    description: Optional[str]
-    uuid: UUID = Field(default_factory=uuid4)
+    name: str = ""
+    description: str = ""
 
 
-class BaseServiceMeta(ABCMeta):
+class BaseServiceMeta(BaseTypedModelMeta):
     """Metaclass responsible for registering different BaseService
-    subclasses."""
+    subclasses.
+
+    This metaclass has two main responsibilities:
+    1. register all BaseService types in the service registry. This is relevant
+    when services are deserialized and instantiated from their JSON or dict
+    representation, because their type needs to be known beforehand.
+    2. ensuring BaseService instance uniqueness by enforcing that no two
+    service instances have the same UUID value. Implementing this at the
+    constructor level guarantees that deserializing a service instance from
+    a JSON representation multiple times always return the same service object.
+    """
 
     def __new__(
         mcs, name: str, bases: Tuple[Type[Any], ...], dct: Dict[str, Any]
@@ -55,17 +65,47 @@ class BaseServiceMeta(ABCMeta):
         """Creates a BaseService class and registers it in
         the `ServiceRegistry`."""
         cls = cast(Type["BaseService"], super().__new__(mcs, name, bases, dct))
-        # skip registering abstract classes; only classes of concrete service
-        # implementations can be instantiated
-        if hasattr(cls.type, "__isabstractmethod__"):
+        # register only classes of concrete service implementations
+        if not hasattr(cls, "SERVICE_TYPE") or cls.SERVICE_TYPE is None:
             return cls
 
         # register the service type in the service registry
         ServiceRegistry().register_service_type(cls)
         return cls
 
+    def __call__(cls, *args: Any, **kwargs: Any) -> "BaseServiceMeta":
+        """Validate the creation of a service."""
+        if not getattr(cls, "SERVICE_TYPE", None):
+            raise RuntimeError(
+                f"Untyped services instances are not allowed. Please set the "
+                f"SERVICE_TYPE class attribute for {cls}."
+            )
+        uuid = kwargs.get("uuid", None)
+        if uuid:
+            if isinstance(uuid, str):
+                uuid = UUID(uuid)
+            if not isinstance(uuid, UUID):
+                raise ValueError(
+                    f"The `uuid` argument for {cls} must be a UUID instance or a "
+                    f"string representation of a UUID."
+                )
 
-class BaseService(metaclass=BaseServiceMeta):
+            # if a service instance with the same UUID is already registered,
+            # return the existing instance rather than the newly created one
+            existing_service = ServiceRegistry().get_service(uuid)
+            if existing_service:
+                logger.debug(
+                    f"Reusing existing service '{existing_service}' "
+                    f"instead of creating a new service with the same UUID."
+                )
+                return cast("BaseServiceMeta", existing_service)
+
+        svc = cast("BaseService", super().__call__(*args, **kwargs))
+        ServiceRegistry().register_service(svc)
+        return cast("BaseServiceMeta", svc)
+
+
+class BaseService(BaseTypedModel, metaclass=BaseServiceMeta):
     """Base service class
 
     This class implements generic functionality concerning the life-cycle
@@ -73,44 +113,34 @@ class BaseService(metaclass=BaseServiceMeta):
     kubernetes deployment etc.).
     """
 
-    CONFIG_TYPE = ServiceConfig
-    STATUS_TYPE = ServiceStatus
-    ENDPOINT_TYPE = BaseServiceEndpoint
+    SERVICE_TYPE: ClassVar[ServiceType]
+
+    uuid: UUID = Field(default_factory=uuid4, allow_mutation=False)
+    admin_state: ServiceState = ServiceState.INACTIVE
+    config: ServiceConfig = Field(default_factory=ServiceConfig)
+    status: ServiceStatus = Field(default_factory=ServiceStatus)
+    # TODO [MEDIUM] allow multiple endpoints per service
+    endpoint: Optional[BaseServiceEndpoint]
 
     def __init__(
         self,
-        config: ServiceConfig,
-        endpoint: Optional[BaseServiceEndpoint] = None,
+        **attrs: Any,
     ) -> None:
-        config.name = config.name or self.__class__.__name__
-        self.config = config
-        self.status = self.STATUS_TYPE()
-        # TODO [LOW]: allow for a service to track multiple endpoints
-        self.endpoint = endpoint
-        # TODO [LOW]: allow for health monitors to be configured for individual
-        #   service endpoints
-        self.admin_state = ServiceState.INACTIVE
-
-    @classmethod
-    @abstractmethod
-    def type(cls) -> ServiceType:
-        """The service type.
-
-        Concrete service implementations must override this method and return
-        a service type descriptor.
-        """
+        super().__init__(**attrs)
+        self.config.name = self.config.name or self.__class__.__name__
 
     @abstractmethod
-    def check_status(self) -> Tuple[ServiceState, Optional[str]]:
+    def check_status(self) -> Tuple[ServiceState, str]:
         """Check the the current operational state of the external service.
 
         This method should be overridden by subclasses that implement
         concrete service tracking functionality.
 
         Returns:
-            The operational state of the external service and an optional error
-            message, if an error is encountered while checking the service
-            status.
+            The operational state of the external service and a message
+            providing additional information about that state (e.g. a
+            description of the error, if one is encountered while checking the
+            service status).
         """
 
     def update_status(self) -> None:
@@ -122,12 +152,12 @@ class BaseService(metaclass=BaseServiceMeta):
         """
         logger.debug(
             "Running status check for service '%s' ...",
-            self.config.name,
+            self,
         )
         state, err = self.check_status()
         logger.debug(
             "Status check results for service '%s': %s [%s]",
-            self.config.name,
+            self,
             state.name,
             err,
         )
@@ -146,12 +176,9 @@ class BaseService(metaclass=BaseServiceMeta):
         Returns:
             The service config and current status serialized as JSON-able dict.
         """
-        return dict(
-            type=self.type().dict(),
-            config=self.config.dict(),
-            status=self.status.dict(),
-            endpoint=self.endpoint.to_dict() if self.endpoint else None,
-        )
+        service_dict = self.dict()
+        service_dict["service_type"] = self.SERVICE_TYPE.dict()
+        return service_dict
 
     def to_json(self) -> str:
         """Serialize the service configuration and status in JSON format.
@@ -178,22 +205,7 @@ class BaseService(metaclass=BaseServiceMeta):
             A service instance created from the serialized configuration
             and status.
         """
-        config = service_dict.get("config")
-        if config is not None:
-            config = cls.CONFIG_TYPE.parse_obj(config)
-        else:
-            config = cls.CONFIG_TYPE()
-        status = service_dict.get("status")
-        if status is not None:
-            status = cls.STATUS_TYPE.parse_obj(status)
-        else:
-            config = cls.STATUS_TYPE()
-        endpoint = service_dict.get("endpoint")
-        if endpoint is not None:
-            endpoint = cls.ENDPOINT_TYPE.from_dict(endpoint)
-        service = cls(config, endpoint)
-        service.status = status
-        return service
+        return cls.parse_obj(service_dict)
 
     @classmethod
     def from_json(
@@ -203,7 +215,7 @@ class BaseService(metaclass=BaseServiceMeta):
         service_dict = json.loads(json_str)
         return cls.from_dict(service_dict)
 
-    def poll_service_status(self, timeout: int) -> None:
+    def poll_service_status(self, timeout: int = 0) -> None:
         """Poll the external service status until the service operational
         state matches the administrative state, or the timeout is reached.
 
@@ -224,30 +236,9 @@ class BaseService(metaclass=BaseServiceMeta):
 
         if timeout > 0:
             logger.error(
-                f"Timed out waiting for service to become {self.admin_state.value}"
-                f": {self.status.last_error}"
+                f"Timed out waiting for service {self} to become "
+                f"{self.admin_state.value}: {self.status.last_error}"
             )
-
-    def prepare_deployment(
-        self,
-    ) -> None:
-        """Prepares deploying the service.
-
-        This method gets called immediately before the service is deployed.
-        Subclasses should override it if they need to run code before the
-        service deployment.
-        """
-
-    def prepare_run(self) -> None:
-        """Prepares running the service."""
-
-    def cleanup_run(self) -> None:
-        """Cleans up resources after the service run is finished."""
-
-    @property
-    def is_provisioned(self) -> bool:
-        """If the service provisioned resources."""
-        return True
 
     @property
     def is_running(self) -> bool:
@@ -267,45 +258,36 @@ class BaseService(metaclass=BaseServiceMeta):
             f"Provisioning resources not implemented for {self}."
         )
 
-    def deprovision(self, force: Optional[bool] = False) -> None:
+    def deprovision(self, force: bool = False) -> None:
         """Deprovisions all resources used by the service."""
         raise NotImplementedError(
             f"Deprovisioning resources not implemented for {self}."
         )
 
-    def resume(self) -> None:
-        """Resumes the service."""
-        raise NotImplementedError(
-            f"Resume operation not implemented for service {self}."
-        )
-
-    def suspend(self) -> None:
-        """Suspends the service."""
-        raise NotImplementedError(
-            f"Suspend operation not implemented for service {self}."
-        )
-
-    def start(self, timeout: int) -> None:
+    def start(self, timeout: int = 0) -> None:
         """Starts the service."""
-        if not ServiceRegistry().service_is_registered(self.config.uuid):
-            ServiceRegistry().register_service(self)
         self.admin_state = ServiceState.ACTIVE
         self.provision()
         self.poll_service_status(timeout)
 
-    def stop(self, timeout: int, force: Optional[bool] = False) -> None:
+    def stop(self, timeout: int = 0, force: bool = False) -> None:
         self.admin_state = ServiceState.INACTIVE
         self.deprovision(force)
         self.poll_service_status(timeout)
 
     def __repr__(self) -> str:
         """String representation of the service."""
-        service_type = self.type()
-        return (
-            f"{self.__class__.__qualname__}(type={service_type.type}, "
-            f"flavor={service_type.flavor}, uuid={self.config.uuid})"
-        )
+        return f"{self.__class__.__qualname__}[{self.uuid}] (type: {self.SERVICE_TYPE.type}, flavor: {self.SERVICE_TYPE.flavor})"
 
     def __str__(self) -> str:
         """String representation of the service."""
         return self.__repr__()
+
+    class Config:
+        """Pydantic configuration class."""
+
+        # validate attribute assignments
+        validate_assignment = True
+        # all attributes with leading underscore are private and therefore
+        # are mutable and not included in serialization
+        underscore_attrs_are_private = True

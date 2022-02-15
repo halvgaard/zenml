@@ -14,7 +14,9 @@
 
 
 import socket
-from typing import Optional
+from typing import Optional, Union
+
+from pydantic import Field
 
 from zenml.logger import get_logger
 from zenml.services.service_endpoint import (
@@ -23,7 +25,10 @@ from zenml.services.service_endpoint import (
     ServiceEndpointProtocol,
     ServiceEndpointStatus,
 )
-from zenml.services.service_monitor import HttpEndpointHealthMonitor
+from zenml.services.service_monitor import (
+    HTTPEndpointHealthMonitor,
+    TCPEndpointHealthMonitor,
+)
 
 logger = get_logger(__name__)
 
@@ -43,9 +48,9 @@ class LocalDaemonServiceEndpointConfig(ServiceEndpointConfig):
             service endpoint automatically.
     """
 
-    protocol: Optional[ServiceEndpointProtocol] = ServiceEndpointProtocol.TCP
+    protocol: ServiceEndpointProtocol = ServiceEndpointProtocol.TCP
     port: Optional[int]
-    allocate_port: Optional[bool] = True
+    allocate_port: bool = True
 
 
 class LocalDaemonServiceEndpointStatus(ServiceEndpointStatus):
@@ -65,17 +70,15 @@ class LocalDaemonServiceEndpoint(BaseServiceEndpoint):
     by external services implemented as local daemon processes.
     """
 
-    STATUS_TYPE = LocalDaemonServiceEndpointStatus
-    CONFIG_TYPE = LocalDaemonServiceEndpointConfig
-    # TODO: allow both TCP and HTTP monitors
-    MONITOR_TYPE = HttpEndpointHealthMonitor
-
-    def __init__(
-        self,
-        config: LocalDaemonServiceEndpointConfig,
-        monitor: Optional[HttpEndpointHealthMonitor] = None,
-    ) -> None:
-        super().__init__(config, monitor)
+    config: LocalDaemonServiceEndpointConfig = Field(
+        default_factory=LocalDaemonServiceEndpointConfig
+    )
+    status: LocalDaemonServiceEndpointStatus = Field(
+        default_factory=LocalDaemonServiceEndpointStatus
+    )
+    monitor: Optional[
+        Union[HTTPEndpointHealthMonitor, TCPEndpointHealthMonitor]
+    ] = Field(..., discriminator="type")
 
     @classmethod
     def port_is_available(cls, port: int) -> bool:

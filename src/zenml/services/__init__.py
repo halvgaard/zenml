@@ -34,8 +34,8 @@ from zenml.services.service_endpoint import (
 )
 from zenml.services.service_monitor import (
     BaseServiceEndpointHealthMonitor,
-    HttpEndpointHealthMonitor,
-    HttpEndpointHealthMonitorConfig,
+    HTTPEndpointHealthMonitor,
+    HTTPEndpointHealthMonitorConfig,
     ServiceEndpointHealthMonitorConfig,
     TCPEndpointHealthMonitor,
     TCPEndpointHealthMonitorConfig,
@@ -56,8 +56,8 @@ __all__ = [
     "BaseService",
     "ServiceEndpointHealthMonitorConfig",
     "BaseServiceEndpointHealthMonitor",
-    "HttpEndpointHealthMonitorConfig",
-    "HttpEndpointHealthMonitor",
+    "HTTPEndpointHealthMonitorConfig",
+    "HTTPEndpointHealthMonitor",
     "TCPEndpointHealthMonitorConfig",
     "TCPEndpointHealthMonitor",
     "LocalDaemonService",

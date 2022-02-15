@@ -12,16 +12,16 @@
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
 
-import json
 import socket
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from abc import abstractmethod
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import requests  # type: ignore
-from pydantic import BaseModel
+from pydantic import Field
 
 from zenml.logger import get_logger
 from zenml.services.service_status import ServiceState
+from zenml.utils.typed_model import BaseTypedModel
 
 logger = get_logger(__name__)
 
@@ -33,25 +33,21 @@ if TYPE_CHECKING:
 DEFAULT_HTTP_HEALTHCHECK_TIMEOUT = 5
 
 
-class ServiceEndpointHealthMonitorConfig(BaseModel):
+class ServiceEndpointHealthMonitorConfig(BaseTypedModel):
     """Generic service health monitor configuration."""
 
 
-class BaseServiceEndpointHealthMonitor(ABC):
+class BaseServiceEndpointHealthMonitor(BaseTypedModel):
     """Base class used for service endpoint health monitors."""
 
-    CONFIG_TYPE = ServiceEndpointHealthMonitorConfig
-
-    def __init__(
-        self,
-        config: ServiceEndpointHealthMonitorConfig,
-    ) -> None:
-        self.config = config
+    config: ServiceEndpointHealthMonitorConfig = Field(
+        default_factory=ServiceEndpointHealthMonitorConfig
+    )
 
     @abstractmethod
     def check_endpoint_status(
         self, endpoint: "BaseServiceEndpoint"
-    ) -> Tuple[ServiceState, Optional[str]]:
+    ) -> Tuple[ServiceState, str]:
         """Check the the current operational state of the external
         service endpoint.
 
@@ -64,58 +60,8 @@ class BaseServiceEndpointHealthMonitor(ABC):
             the service endpoint status.
         """
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialize the endpoint monitor configuration in JSON-able
-        format.
 
-        Returns:
-            The endpoint monitor config serialized as JSON-able dict.
-        """
-        return dict(
-            config=self.config.dict(),
-        )
-
-    def to_json(self) -> str:
-        """Serialize the endpoint monitor configuration in JSON format.
-
-        Returns:
-            The endpoint monitor config serialized as JSON.
-        """
-        return json.dumps(self.to_dict(), indent=4)
-
-    @classmethod
-    def from_dict(
-        cls,
-        monitor_dict: Dict[str, Any],
-    ) -> "BaseServiceEndpointHealthMonitor":
-        """Instantiate an endpoint monitor instance from a serialized JSON-able
-        dict representation containing monitor configuration.
-
-        Args:
-            monitor_dict: the endpoint monitor config serialized as JSON-able
-                dict.
-
-        Returns:
-            An endpoint monitor instance created from the serialized
-            configuration.
-        """
-        config = monitor_dict.get("config")
-        if config is not None:
-            config = cls.CONFIG_TYPE.parse_obj(config)
-        else:
-            config = cls.CONFIG_TYPE()
-        return cls(config)
-
-    @classmethod
-    def from_json(
-        cls,
-        json_str: str,
-    ) -> "BaseServiceEndpointHealthMonitor":
-        monitor_dict = json.loads(json_str)
-        return cls.from_dict(monitor_dict)
-
-
-class HttpEndpointHealthMonitorConfig(ServiceEndpointHealthMonitorConfig):
+class HTTPEndpointHealthMonitorConfig(ServiceEndpointHealthMonitorConfig):
     """HTTP service endpoint health monitor configuration.
 
     Attributes:
@@ -127,22 +73,21 @@ class HttpEndpointHealthMonitorConfig(ServiceEndpointHealthMonitorConfig):
         http_timeout: HTTP health check request timeout in seconds.
     """
 
-    healthcheck_uri_path: Optional[str]
-    http_status_code: Optional[int] = 200
-    http_timeout: Optional[int] = DEFAULT_HTTP_HEALTHCHECK_TIMEOUT
+    healthcheck_uri_path: str = ""
+    http_status_code: int = 200
+    http_timeout: int = DEFAULT_HTTP_HEALTHCHECK_TIMEOUT
 
 
-class HttpEndpointHealthMonitor(BaseServiceEndpointHealthMonitor):
-    """HTTP service endpoint health monitor."""
+class HTTPEndpointHealthMonitor(BaseServiceEndpointHealthMonitor):
+    """HTTP service endpoint health monitor.
 
-    CONFIG_TYPE = HttpEndpointHealthMonitorConfig
+    Attributes:
+        config: HTTP endpoint health monitor configuration
+    """
 
-    def __init__(
-        self,
-        config: HttpEndpointHealthMonitorConfig,
-    ) -> None:
-        super().__init__(config)
-        self.config = config
+    config: HTTPEndpointHealthMonitorConfig = Field(
+        default_factory=HTTPEndpointHealthMonitorConfig
+    )
 
     def get_healthcheck_uri(
         self, endpoint: "BaseServiceEndpoint"
@@ -154,21 +99,30 @@ class HttpEndpointHealthMonitor(BaseServiceEndpointHealthMonitor):
 
     def check_endpoint_status(
         self, endpoint: "BaseServiceEndpoint"
-    ) -> Tuple[ServiceState, Optional[str]]:
+    ) -> Tuple[ServiceState, str]:
         """Run a HTTP endpoint API healthcheck
 
         Returns:
             The operational state of the external HTTP endpoint and an
-            optional error message, if an error is encountered while checking
-            the HTTP endpoint status.
+            optional message describing that state (e.g. an error message,
+            if an error is encountered while checking the HTTP endpoint
+            status).
         """
+        from zenml.services.service_endpoint import ServiceEndpointProtocol
+
+        if endpoint.status.protocol not in [
+            ServiceEndpointProtocol.HTTP,
+            ServiceEndpointProtocol.HTTPS,
+        ]:
+            return ServiceState.ERROR, "endpoint protocol is not HTTP nor HTTPS"
+
         check_uri = self.get_healthcheck_uri(endpoint)
         if not check_uri:
             return ServiceState.ERROR, "no HTTP healthcheck URI available"
 
         logger.debug("Running HTTP healthcheck for URI: %s", check_uri)
 
-        error = None
+        error = ""
 
         try:
             r = requests.head(
@@ -177,7 +131,7 @@ class HttpEndpointHealthMonitor(BaseServiceEndpointHealthMonitor):
             )
             if r.status_code == self.config.http_status_code:
                 # the endpoint is healthy
-                return ServiceState.ACTIVE, None
+                return ServiceState.ACTIVE, ""
             error = f"HTTP endpoint healthcheck returned unexpected status code: {r.status_code}"
         except requests.ConnectionError as e:
             error = f"HTTP endpoint healthcheck connection error: {str(e)}"
@@ -199,15 +153,15 @@ class TCPEndpointHealthMonitorConfig(ServiceEndpointHealthMonitorConfig):
 
 
 class TCPEndpointHealthMonitor(BaseServiceEndpointHealthMonitor):
-    """TCP service endpoint health monitor."""
+    """TCP service endpoint health monitor.
 
-    CONFIG_TYPE = TCPEndpointHealthMonitorConfig
+    Attributes:
+        config: TCP endpoint health monitor configuration
+    """
 
-    def __init__(
-        self,
-        config: TCPEndpointHealthMonitorConfig,
-    ) -> None:
-        super().__init__(config)
+    config: TCPEndpointHealthMonitorConfig = Field(
+        default_factory=TCPEndpointHealthMonitorConfig
+    )
 
     @classmethod
     def port_is_open(cls, hostname: str, port: int) -> bool:
@@ -226,16 +180,20 @@ class TCPEndpointHealthMonitor(BaseServiceEndpointHealthMonitor):
 
     def check_endpoint_status(
         self, endpoint: "BaseServiceEndpoint"
-    ) -> Tuple[ServiceState, Optional[str]]:
+    ) -> Tuple[ServiceState, str]:
         """Run a TCP endpoint healthcheck
 
         Returns:
             The operational state of the external TCP endpoint and an
-            optional error message, if an error is encountered while checking
-            the TCP endpoint status.
+            optional message describing that state (e.g. an error message,
+            if an error is encountered while checking the TCP endpoint
+            status).
         """
         if not endpoint.status.port or not endpoint.status.hostname:
-            return ServiceState.ERROR, "TCP port and hostname values are not known"
+            return (
+                ServiceState.ERROR,
+                "TCP port and hostname values are not known",
+            )
 
         logger.debug(
             "Running TCP healthcheck for TCP port: %d", endpoint.status.port
@@ -243,7 +201,7 @@ class TCPEndpointHealthMonitor(BaseServiceEndpointHealthMonitor):
 
         if self.port_is_open(endpoint.status.hostname, endpoint.status.port):
             # the endpoint is healthy
-            return ServiceState.ACTIVE, None
+            return ServiceState.ACTIVE, ""
 
         return (
             ServiceState.ERROR,
