@@ -34,10 +34,13 @@ logger = get_logger(__name__)
 class ServiceConfig(BaseTypedModel):
     """Generic service configuration.
 
+    Concrete service classes should extend this class and add additional
+    attributes that they want to see reflected and used in the service
+    configuration.
+
     Attributes:
-        name: unique name for the service instance
+        name: name for the service instance
         description: description of the service
-        uuid: unique identifier for the service
     """
 
     # TODO: pipeline metadata (name, run id, step etc)
@@ -111,6 +114,15 @@ class BaseService(BaseTypedModel, metaclass=BaseServiceMeta):
     This class implements generic functionality concerning the life-cycle
     management and tracking of an external service (e.g. process, container,
     kubernetes deployment etc.).
+
+    Attributes:
+        SERVICE_TYPE: a service type descriptor with information describing
+            the service class. Every concrete service class must define this.
+        admin_state: the administrative state of the service.
+        uuid: unique UUID identifier for the service instance.
+        config: service configuration
+        status: service status
+        endpoint: optional service endpoint
     """
 
     SERVICE_TYPE: ClassVar[ServiceType]
@@ -212,6 +224,17 @@ class BaseService(BaseTypedModel, metaclass=BaseServiceMeta):
         cls,
         json_str: str,
     ) -> "BaseService":
+        """Instantiate a service instance from a JSON representation containing
+        service and endpoint configuration, and an optional last known status.
+
+        Args:
+            json_str: the service and endpoint config and optional last known
+            status serialized in JSON format.
+
+        Returns:
+            A service instance created from the serialized configuration
+            and status.
+        """
         service_dict = json.loads(json_str)
         return cls.from_dict(service_dict)
 
@@ -242,6 +265,15 @@ class BaseService(BaseTypedModel, metaclass=BaseServiceMeta):
 
     @property
     def is_running(self) -> bool:
+        """Check if the service is currently running.
+
+        This method will actively poll the external service to get its status
+        and will return the result.
+
+        Returns:
+            True if the service is running and active (i.e. the endpoints are
+            responsive, if any are configured), False otherwise.
+        """
         self.update_status()
         return self.status.state == ServiceState.ACTIVE and (
             not self.endpoint or self.endpoint.is_active()
@@ -249,6 +281,14 @@ class BaseService(BaseTypedModel, metaclass=BaseServiceMeta):
 
     @property
     def is_stopped(self) -> bool:
+        """Check if the service is currently stopped.
+
+        This method will actively poll the external service to get its status
+        and will return the result.
+
+        Returns:
+            True if the service is stopped, False otherwise.
+        """
         self.update_status()
         return self.status.state == ServiceState.INACTIVE
 
@@ -265,15 +305,40 @@ class BaseService(BaseTypedModel, metaclass=BaseServiceMeta):
         )
 
     def start(self, timeout: int = 0) -> None:
-        """Starts the service."""
+        """Start the service and optionally wait for it to become active.
+
+        Args:
+            timeout: amount of time to wait for the service to become active.
+                If set to 0, the method will return immediately after checking
+                the service status.
+
+        Raises:
+            Exception: if the service cannot be started
+        """
         self.admin_state = ServiceState.ACTIVE
         self.provision()
-        self.poll_service_status(timeout)
+        if timeout > 0:
+            self.poll_service_status(timeout)
+        if not self.is_running:
+            raise Exception(f"Failed to start service {self}.")
 
     def stop(self, timeout: int = 0, force: bool = False) -> None:
+        """Stop the service and optionally wait for it to shutdown.
+
+        Args:
+            timeout: amount of time to wait for the service to shutdown.
+                If set to 0, the method will return immediately after checking
+                the service status.
+
+        Raises:
+            Exception: if the service cannot be stopped
+        """
         self.admin_state = ServiceState.INACTIVE
         self.deprovision(force)
-        self.poll_service_status(timeout)
+        if timeout > 0:
+            self.poll_service_status(timeout)
+        if not self.is_stopped:
+            raise Exception(f"Failed to stop service {self}.")
 
     def __repr__(self) -> str:
         """String representation of the service."""

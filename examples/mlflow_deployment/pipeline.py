@@ -26,7 +26,7 @@ from zenml.integrations.mlflow.mlflow_environment import (
 from zenml.pipelines import pipeline
 from zenml.steps import BaseStepConfig, Output, step
 
-from zenml.integrations.mlflow.services.mlflow_deployment import (
+from zenml.integrations.mlflow.services import (
     MLFlowDeploymentService,
     MLFlowDeploymentConfig,
 )
@@ -126,6 +126,7 @@ def predictor(model: tf.keras.Model) -> MLFlowDeploymentService:
     """
 
     predictor_cfg = MLFlowDeploymentConfig(
+        model_name="model",
         model_uri=mlflow.get_artifact_uri("model"),
         workers=3,
         mlserver=False,

@@ -230,7 +230,6 @@ else:
             sys.exit(1)
 
         # redirect standard file descriptors to devnull (or the given logfile)
-        os.closerange(0, 3)
         devnull = "/dev/null"
         if hasattr(os, "devnull"):
             devnull = os.devnull

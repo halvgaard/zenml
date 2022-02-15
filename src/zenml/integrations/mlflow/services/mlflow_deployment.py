@@ -21,8 +21,8 @@ logger = get_logger(__name__)
 MLFLOW_PREDICTION_URL_PATH = "/invocations"
 MLFLOW_HEALTHCHECK_URL_PATH = "/ping"
 
-MLSERVER_PREDICTION_URL_PATH = "/inference"
-MLSERVER_HEALTHCHECK_URL_PATH = "/healtz"
+MLSERVER_PREDICTION_URL_PATH = "/invocations"
+MLSERVER_HEALTHCHECK_URL_PATH = "/v2/models/mlflow-model/ready"
 
 
 class MLFlowDeploymentEndpointConfig(LocalDaemonServiceEndpointConfig):
@@ -32,11 +32,16 @@ class MLFlowDeploymentEndpointConfig(LocalDaemonServiceEndpointConfig):
         prediction_uri_path: URI subpath for prediction requests
     """
 
-    prediction_uri_path: Optional[str]
+    prediction_uri_path: str
 
 
 class MLFlowDeploymentEndpoint(LocalDaemonServiceEndpoint):
-    """A service endpoint exposed by the MLflow deployment daemon."""
+    """A service endpoint exposed by the MLflow deployment daemon.
+
+    Attributes:
+        config: service endpoint configuration
+        monitor: optional service endpoint health monitor
+    """
 
     config: MLFlowDeploymentEndpointConfig
     monitor: HTTPEndpointHealthMonitor
@@ -54,6 +59,7 @@ class MLFlowDeploymentConfig(LocalDaemonServiceConfig):
 
     Attributes:
         model_uri: URI of the MLflow model to serve
+        model_name: the name of the model
         workers: number of workers to use for the prediction service
         mlserver: set to True to use the MLflow MLServer backend (see
             https://github.com/SeldonIO/MLServer). If False, the
@@ -61,11 +67,21 @@ class MLFlowDeploymentConfig(LocalDaemonServiceConfig):
     """
 
     model_uri: str
+    model_name: str
     workers: Optional[int] = 1
     mlserver: Optional[bool] = False
 
 
 class MLFlowDeploymentService(LocalDaemonService):
+    """MLFlow deployment service that can be used to start a local prediction
+    server for MLflow models.
+
+    Attributes:
+        SERVICE_TYPE: a service type descriptor with information describing
+            the MLflow deployment service class
+        config: service configuration
+        endpoint: optional service endpoint
+    """
 
     SERVICE_TYPE = ServiceType(
         name="mlflow-deployment",
@@ -90,29 +106,26 @@ class MLFlowDeploymentService(LocalDaemonService):
             and "endpoint" not in attrs
         ):
             if config.mlserver:
-                endpoint = MLFlowDeploymentEndpoint(
-                    config=MLFlowDeploymentEndpointConfig(
-                        protocol=ServiceEndpointProtocol.HTTP,
-                        prediction_uri_path=MLSERVER_PREDICTION_URL_PATH,
-                    ),
-                    monitor=HTTPEndpointHealthMonitor(
-                        config=HTTPEndpointHealthMonitorConfig(
-                            healthcheck_uri_path=MLSERVER_HEALTHCHECK_URL_PATH
-                        )
-                    ),
-                )
+                prediction_uri_path = MLSERVER_PREDICTION_URL_PATH
+                healthcheck_uri_path = MLSERVER_HEALTHCHECK_URL_PATH
+                use_head_request = False
             else:
-                endpoint = MLFlowDeploymentEndpoint(
-                    config=MLFlowDeploymentEndpointConfig(
-                        protocol=ServiceEndpointProtocol.HTTP,
-                        prediction_uri_path=MLFLOW_PREDICTION_URL_PATH,
-                    ),
-                    monitor=HTTPEndpointHealthMonitor(
-                        config=HTTPEndpointHealthMonitorConfig(
-                            healthcheck_uri_path=MLFLOW_HEALTHCHECK_URL_PATH
-                        )
-                    ),
-                )
+                prediction_uri_path = MLFLOW_PREDICTION_URL_PATH
+                healthcheck_uri_path = MLFLOW_HEALTHCHECK_URL_PATH
+                use_head_request = True
+
+            endpoint = MLFlowDeploymentEndpoint(
+                config=MLFlowDeploymentEndpointConfig(
+                    protocol=ServiceEndpointProtocol.HTTP,
+                    prediction_uri_path=prediction_uri_path,
+                ),
+                monitor=HTTPEndpointHealthMonitor(
+                    config=HTTPEndpointHealthMonitorConfig(
+                        healthcheck_uri_path=healthcheck_uri_path,
+                        use_head_request=use_head_request,
+                    )
+                ),
+            )
             attrs["endpoint"] = endpoint
         super().__init__(config=config, **attrs)
 
@@ -141,6 +154,18 @@ class MLFlowDeploymentService(LocalDaemonService):
             logger.info(
                 "MLflow prediction service stopped. Resuming normal execution."
             )
+
+    @property
+    def prediction_uri(self) -> Optional[str]:
+        """Get the URI where the prediction service is answering requests.
+
+        Returns:
+            The URI where the prediction service can be contacted to process
+            HTTP/REST inference requests, or None, if the service isn't running.
+        """
+        if not self.is_running:
+            return None
+        return self.endpoint.prediction_uri
 
     def predict(self, request: np.ndarray) -> np.ndarray:
         """Make a prediction using the service.

@@ -23,7 +23,11 @@ class MlflowIntegration(Integration):
     """Definition of Plotly integration for ZenML."""
 
     NAME = MLFLOW
-    REQUIREMENTS = ["mlflow>=1.2.0"]
+    REQUIREMENTS = [
+        "mlflow>=1.2.0",
+        "mlserver>=0.5.3",
+        "mlserver-mlflow>=0.5.3",
+    ]
 
     @staticmethod
     def activate() -> None:

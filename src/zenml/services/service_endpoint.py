@@ -36,6 +36,10 @@ class ServiceEndpointProtocol(StrEnum):
 class ServiceEndpointConfig(BaseTypedModel):
     """Generic service endpoint configuration.
 
+    Concrete service classes should extend this class and add additional
+    attributes that they want to see reflected and use in the endpoint
+    configuration.
+
     Attributes:
         name: unique name for the service endpoint
         description: description of the service endpoint
@@ -49,6 +53,9 @@ class ServiceEndpointStatus(ServiceStatus):
     """Status information describing the operational state of a service
     endpoint (e.g. a HTTP/HTTPS API or generic TCP endpoint exposed by a
     service).
+
+    Concrete service classes should extend this class and add additional
+    attributes that make up the operational state of the service endpoint.
 
     Attributes:
         protocol: the TCP protocol used by the service endpoint
@@ -82,6 +89,12 @@ class BaseServiceEndpoint(BaseTypedModel):
     This class implements generic functionality concerning the life-cycle
     management and tracking of an external service endpoint (e.g. a HTTP/HTTPS
     API or generic TCP endpoint exposed by a service).
+
+    Attributes:
+        admin_state: the administrative state of the service endpoint
+        config: service endpoint configuration
+        status: service endpoint status
+        monitor: optional service endpoint health monitor
     """
 
     admin_state: ServiceState = ServiceState.INACTIVE
@@ -133,9 +146,27 @@ class BaseServiceEndpoint(BaseTypedModel):
         self.status.update_state(state, err)
 
     def is_active(self) -> bool:
+        """Check if the service endpoint is active (i.e. is responsive and can
+        receive requests).
+
+        This method will use the configured health monitor to actively check the
+        endpoint status and will return the result.
+
+        Returns:
+            True if the service endpoint is active, False otherwise.
+        """
         self.update_status()
         return self.status.state == ServiceState.ACTIVE
 
     def is_inactive(self) -> bool:
+        """Check if the service endpoint is inactive (i.e. is not responsive and
+        cannot receive requests).
+
+        This method will use the configured health monitor to actively check the
+        endpoint status and will return the result.
+
+        Returns:
+            True if the service endpoint is inactive, False otherwise.
+        """
         self.update_status()
         return self.status.state == ServiceState.INACTIVE

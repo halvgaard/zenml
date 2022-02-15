@@ -11,6 +11,10 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
+"""
+This executable file is utilized as an entrypoint for all ZenML services
+that are implemented as locally running daemon processes.
+"""
 
 import os
 

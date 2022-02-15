@@ -27,7 +27,11 @@ if TYPE_CHECKING:
 
 
 class ServiceRegistry(metaclass=SingletonMetaClass):
-    """Registry of service types and service instances."""
+    """Registry of service types and service instances.
+
+    The service registry provides a central place to register service types
+    as well as the service instances.
+    """
 
     def __init__(self) -> None:
         self.service_types: Dict[ServiceType, Type["BaseService"]] = {}

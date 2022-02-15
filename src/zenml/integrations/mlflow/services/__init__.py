@@ -12,5 +12,6 @@
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
 from zenml.integrations.mlflow.services.mlflow_deployment import (  # noqa
+    MLFlowDeploymentConfig,
     MLFlowDeploymentService,
 )

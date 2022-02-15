@@ -37,6 +37,9 @@ class ServiceStatus(BaseModel):
     or service tracked by ZenML (e.g. process, container, kubernetes
     deployment etc.).
 
+    Concrete service classes should extend this class and add additional
+    attributes that make up the operational state of the service.
+
     Attributes:
         state: the current operational state
         last_state: the operational state prior to the last status update

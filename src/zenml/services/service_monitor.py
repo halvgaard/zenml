@@ -34,11 +34,20 @@ DEFAULT_HTTP_HEALTHCHECK_TIMEOUT = 5
 
 
 class ServiceEndpointHealthMonitorConfig(BaseTypedModel):
-    """Generic service health monitor configuration."""
+    """Generic service health monitor configuration.
+
+    Concrete service classes should extend this class and add additional
+    attributes that they want to see reflected and use in the health monitor
+    configuration.
+    """
 
 
 class BaseServiceEndpointHealthMonitor(BaseTypedModel):
-    """Base class used for service endpoint health monitors."""
+    """Base class used for service endpoint health monitors.
+
+    Attributes:
+        config: endpoint health monitor configuration
+    """
 
     config: ServiceEndpointHealthMonitorConfig = Field(
         default_factory=ServiceEndpointHealthMonitorConfig
@@ -68,12 +77,15 @@ class HTTPEndpointHealthMonitorConfig(ServiceEndpointHealthMonitorConfig):
         healthcheck_uri_path: URI subpath to use to perform service endpoint
             healthchecks. If not set, the service endpoint URI will be used
             instead.
+        use_head_request: set to True to use a HEAD request instead of a GET
+            when calling the healthcheck URI.
         http_status_code: HTTP status code to expect in the health check
             response.
         http_timeout: HTTP health check request timeout in seconds.
     """
 
     healthcheck_uri_path: str = ""
+    use_head_request: bool = False
     http_status_code: int = 200
     http_timeout: int = DEFAULT_HTTP_HEALTHCHECK_TIMEOUT
 
@@ -125,10 +137,16 @@ class HTTPEndpointHealthMonitor(BaseServiceEndpointHealthMonitor):
         error = ""
 
         try:
-            r = requests.head(
-                check_uri,
-                timeout=self.config.http_timeout,
-            )
+            if self.config.use_head_request:
+                r = requests.head(
+                    check_uri,
+                    timeout=self.config.http_timeout,
+                )
+            else:
+                r = requests.get(
+                    check_uri,
+                    timeout=self.config.http_timeout,
+                )
             if r.status_code == self.config.http_status_code:
                 # the endpoint is healthy
                 return ServiceState.ACTIVE, ""

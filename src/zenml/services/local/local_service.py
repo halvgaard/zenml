@@ -168,6 +168,12 @@ class LocalDaemonService(BaseService):
     TypeError: Cannot load service with unregistered service type:
     name='sleeper' type='daemon' flavor='sleeping' description='Sleeping daemon'
     ```
+
+
+    Attributes:
+        config: service configuration
+        status: service status
+        endpoint: optional service endpoint
     """
 
     config: LocalDaemonServiceConfig = Field(
@@ -323,5 +329,7 @@ class LocalDaemonService(BaseService):
         """Run the service daemon process associated with this service.
 
         Subclasses must implement this method to provide the service daemon
-        functionality.
+        functionality. This method will be executed in the context of the
+        running daemon, not in the context of the process that calls the
+        `start` method.
         """

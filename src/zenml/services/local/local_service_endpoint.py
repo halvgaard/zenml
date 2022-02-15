@@ -54,12 +54,7 @@ class LocalDaemonServiceEndpointConfig(ServiceEndpointConfig):
 
 
 class LocalDaemonServiceEndpointStatus(ServiceEndpointStatus):
-    """Local daemon service endpoint status.
-
-    Attributes:
-    """
-
-    ...
+    """Local daemon service endpoint status."""
 
 
 class LocalDaemonServiceEndpoint(BaseServiceEndpoint):
@@ -68,6 +63,11 @@ class LocalDaemonServiceEndpoint(BaseServiceEndpoint):
     This class extends the base service endpoint class with functionality
     concerning the life-cycle management and tracking of endpoints exposed
     by external services implemented as local daemon processes.
+
+    Attributes:
+        config: service endpoint configuration
+        status: service endpoint status
+        monitor: optional service endpoint health monitor
     """
 
     config: LocalDaemonServiceEndpointConfig = Field(
