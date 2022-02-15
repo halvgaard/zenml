@@ -33,90 +33,91 @@ logger = get_logger(__name__)
 
 # TODO [ENG-235]: Investigate supporting Windows if Windows can run Kubeflow.
 
-# flake8: noqa: C901
-if sys.platform == "win32":
-    logger.warning(
-        "Daemon functionality is currently not supported on Windows."
-    )
-else:
 
-    CHILD_PROCESS_WAIT_TIMEOUT = 5
+F = TypeVar("F", bound=Callable[..., Any])
 
-    F = TypeVar("F", bound=Callable[..., Any])
 
-    @overload
-    def daemonize(
-        _func: F,
-    ) -> F:
-        """Type annotations for deamonizer decorator in case of no arguments."""
-        ...
+@overload
+def daemonize(
+    _func: F,
+) -> F:
+    """Type annotations for deamonizer decorator in case of no arguments."""
+    ...
 
-    @overload
-    def daemonize(
-        *,
-        log_file: Optional[str] = None,
-        pid_file: Optional[str] = None,
-        working_directory: str = "/",
-    ) -> Callable[[F], F]:
-        """Type annotations for deamonizer decorator in case of arguments."""
-        ...
 
-    def daemonize(
-        _func: Optional[F] = None,
-        *,
-        log_file: Optional[str] = None,
-        pid_file: Optional[str] = None,
-        working_directory: str = "/",
-    ) -> Union[F, Callable[[F], F]]:
-        """Decorator that executes the decorated function as a daemon process.
+@overload
+def daemonize(
+    *,
+    log_file: Optional[str] = None,
+    pid_file: Optional[str] = None,
+    working_directory: str = "/",
+) -> Callable[[F], F]:
+    """Type annotations for deamonizer decorator in case of arguments."""
+    ...
 
-        Use this decorator to easily transform any function into a daemon
+
+def daemonize(
+    _func: Optional[F] = None,
+    *,
+    log_file: Optional[str] = None,
+    pid_file: Optional[str] = None,
+    working_directory: str = "/",
+) -> Union[F, Callable[[F], F]]:
+    """Decorator that executes the decorated function as a daemon process.
+
+    Use this decorator to easily transform any function into a daemon
+    process.
+
+    Example:
+
+    ```python
+    import time
+    from zenml.utils.daemonizer import daemonize
+
+
+    @daemonize(log_file='/tmp/daemon.log', pid_file='/tmp/daemon.pid')
+    def sleeping_daemon(period: int) -> None:
+        print(f"I'm a daemon! I will sleep for {period} seconds.")
+        time.sleep(period)
+        print("Done sleeping, flying away.")
+
+    if not sleeping_daemon(period=30):
+        exit(0)
+
+    print("I'm the daemon's parent!.")
+    time.sleep(10) # just to prove that the daemon is running in parallel
+    ```
+
+    Args:
+        _func: decorated function
+        log_file: file where stdout and stderr are redirected for the daemon
+            process. If not supplied, the daemon will be silenced (i.e. have
+            its stdout/stderr redirected to /dev/null).
+        pid_file: an optional file where the PID of the daemon process will
+            be stored.
+        working_directory: Working directory for the daemon process,
+            defaults to the root directory.
+    Returns:
+        Decorated function that, when called, will detach from the current
+        process and continue executing in the background, as a daemon
         process.
+    """
 
-        Example:
+    def inner_decorator(_func: F) -> F:
+        def daemon(*args: Any, **kwargs: Any) -> int:
+            """Standard daemonization of a process.
 
-        ```python
-        import time
-        from zenml.utils.daemonizer import daemonize
+            Returns:
+                The PID of the daemon process is returned to the parent
+                process and a zero value is returned to the child process.
 
-
-        @daemonize(log_file='/tmp/daemon.log', pid_file='/tmp/daemon.pid')
-        def sleeping_daemon(period: int) -> None:
-            print(f"I'm a daemon! I will sleep for {period} seconds.")
-            time.sleep(period)
-            print("Done sleeping, flying away.")
-
-        if not sleeping_daemon(period=30):
-            exit(0)
-
-        print("I'm the daemon's parent!.")
-        time.sleep(10) # just to prove that the daemon is running in parallel
-        ```
-
-        Args:
-            _func: decorated function
-            log_file: file where stdout and stderr are redirected for the daemon
-                process. If not supplied, the daemon will be silenced (i.e. have
-                its stdout/stderr redirected to /dev/null).
-            pid_file: an optional file where the PID of the daemon process will
-                be stored.
-            working_directory: Working directory for the daemon process,
-                defaults to the root directory.
-        Returns:
-            Decorated function that, when called, will detach from the current
-            process and continue executing in the background, as a daemon
-            process.
-        """
-
-        def inner_decorator(_func: F) -> F:
-            def daemon(*args: Any, **kwargs: Any) -> int:
-                """Standard daemonization of a process.
-
-                Returns:
-                    The PID of the daemon process is returned to the parent
-                    process and a zero value is returned to the child process.
-
-                """
+            """
+            # flake8: noqa: C901
+            if sys.platform == "win32":
+                logger.error(
+                    "Daemon functionality is currently not supported on Windows."
+                )
+            else:
                 run_as_daemon(
                     _func,
                     log_file=log_file,
@@ -126,14 +127,24 @@ else:
                     **kwargs,
                 )
 
-                return 0
+            return 0
 
-            return cast(F, daemon)
+        return cast(F, daemon)
 
-        if _func is None:
-            return inner_decorator
-        else:
-            return inner_decorator(_func)
+    if _func is None:
+        return inner_decorator
+    else:
+        return inner_decorator(_func)
+
+
+# flake8: noqa: C901
+if sys.platform == "win32":
+    logger.warning(
+        "Daemon functionality is currently not supported on Windows."
+    )
+else:
+
+    CHILD_PROCESS_WAIT_TIMEOUT = 5
 
     def terminate_children() -> None:
         """Terminate all processes that are children of the currently running

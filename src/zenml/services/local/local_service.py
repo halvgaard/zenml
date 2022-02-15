@@ -14,13 +14,13 @@
 
 import os
 import pathlib
-import signal
 import subprocess
 import sys
 import tempfile
 from abc import abstractmethod
 from typing import Dict, List, Optional, Tuple
 
+import psutil
 from pydantic import Field
 
 from zenml.logger import get_logger
@@ -29,7 +29,6 @@ from zenml.services.local.local_service_endpoint import (
 )
 from zenml.services.service import BaseService, ServiceConfig
 from zenml.services.service_status import ServiceState, ServiceStatus
-from zenml.utils.daemon import get_daemon_pid_if_running
 
 logger = get_logger(__name__)
 
@@ -46,15 +45,9 @@ class LocalDaemonServiceConfig(ServiceConfig):
         silent_daemon: set to True to suppress the output of the daemon
             (i.e. redirect stdout and stderr to /dev/null). If False, the
             daemon output will be redirected to a logfile.
-        graceful_shutdown_signal: the signal to send to the daemon process
-            to shut it down gracefully.
-        forceful_shutdown_signal: the signal to send to the daemon process
-            to shut it down forcefully.
     """
 
     silent_daemon: bool = False
-    graceful_shutdown_signal: signal.Signals = signal.SIGINT
-    forceful_shutdown_signal: signal.Signals = signal.SIGKILL
 
 
 class LocalDaemonServiceStatus(ServiceStatus):
@@ -117,7 +110,15 @@ class LocalDaemonServiceStatus(ServiceStatus):
         pid_file = self.pid_file
         if not pid_file:
             return None
-        return get_daemon_pid_if_running(pid_file)
+        if sys.platform == "win32":
+            logger.warning(
+                "Daemon functionality is currently not supported on Windows."
+            )
+            return None
+        else:
+            from zenml.utils.daemon import get_daemon_pid_if_running
+
+            return get_daemon_pid_if_running(pid_file)
 
 
 class LocalDaemonService(BaseService):
@@ -299,16 +300,17 @@ class LocalDaemonService(BaseService):
             return
 
         logger.info("Stopping daemon for service '%s' ...", self)
-
-        s = self.config.graceful_shutdown_signal
+        try:
+            p = psutil.Process(pid)
+        except psutil.Error:
+            logger.error(
+                "Could not find process for for service '%s' ...", self
+            )
+            return
         if force:
-            s = self.config.forceful_shutdown_signal
-        logger.debug(
-            "Sending signal %s to daemon process for service '%s' to stop",
-            s.name,
-            self,
-        )
-        os.kill(pid, s)
+            p.kill()
+        else:
+            p.terminate()
 
     def provision(self) -> None:
         self._start_daemon()

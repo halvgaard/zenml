@@ -28,7 +28,7 @@ class BaseTypedModelMeta(ModelMetaclass):
         """Creates a pydantic BaseModel class that includes a hidden attribute that
         reflects the full class identifier."""
         type_ann = Literal[f"{dct['__module__']}.{dct['__qualname__']}"]  # type: ignore
-        type = Field(type_ann.__args__[0])
+        type = Field(f"{dct['__module__']}.{dct['__qualname__']}")
         dct.setdefault("__annotations__", dict())["type"] = type_ann
         dct["type"] = type
         cls = cast(
