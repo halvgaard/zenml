@@ -18,13 +18,14 @@ import os
 import tensorflow as tf
 
 from zenml.environment import Environment
+from zenml.steps import StepEnvironment, STEP_ENVIRONMENT_NAME
 from zenml.integrations.mlflow.mlflow_step_decorator import enable_mlflow
 from zenml.integrations.mlflow.mlflow_environment import (
     MLFLOW_STEP_ENVIRONMENT_NAME,
 )
 
 from zenml.pipelines import pipeline
-from zenml.steps import BaseStepConfig, Output, step
+from zenml.steps import BaseStepConfig, Output, StepContext, step
 
 from zenml.integrations.mlflow.services import (
     MLFlowDeploymentService,
@@ -116,8 +117,10 @@ def tf_evaluator(
 
 # Define the step and enable mlflow - order of decorators is important here
 @enable_mlflow
-@step
-def predictor(model: tf.keras.Model) -> MLFlowDeploymentService:
+@step(enable_cache=True)
+def predictor(
+    model: tf.keras.Model, context: StepContext
+) -> MLFlowDeploymentService:
     """Start a prediction service
 
     NOTE: the input argument is just a dummy that allows us to enforce that
@@ -125,15 +128,46 @@ def predictor(model: tf.keras.Model) -> MLFlowDeploymentService:
     model is found in the current MLflow run.
     """
 
+    def get_last_service() -> MLFlowDeploymentService:
+        """Get the service created during the last step run."""
+        # get the current pipeline name and step name
+        step_env = Environment()[STEP_ENVIRONMENT_NAME]
+        pipeline_name = step_env.pipeline_name
+        step_name = step_env.step_name
+
+        pipeline = context.metadata_store.get_pipeline(
+            pipeline_name=pipeline_name
+        )
+
+        if len(pipeline.runs) < 2:
+            return None
+        step = pipeline.runs[-2].get_step(name=step_name)
+        for artifact_view in step.outputs.values():
+            # filter out anything but service artifacts
+            if artifact_view.type == "ServiceArtifact":
+                return artifact_view.read()
+
+    last_service = get_last_service()
+
+    model_uri = mlflow.get_artifact_uri("model")
+    if not model_uri:
+        # an MLflow model was not found in the current run, so we simply reuse
+        # the service created during the last step run
+        return last_service
+
+    # stop the service created during the last step run (will be replaced
+    # by a new one to serve the new model)
+    if last_service:
+        last_service.stop(timeout=10)
+
+    # create a new service for the new model
     predictor_cfg = MLFlowDeploymentConfig(
         model_name="model",
-        model_uri=mlflow.get_artifact_uri("model"),
+        model_uri=model_uri,
         workers=3,
         mlserver=False,
     )
-
     service = MLFlowDeploymentService(predictor_cfg)
-
     service.start(timeout=10)
 
     return service
@@ -146,11 +180,9 @@ def batch_inference(
 ) -> Output(predictions=np.ndarray):
     """Run a batch inference request against a prediction service"""
 
-    service.start(timeout=10)  # should be a NOP
-
+    service.start(timeout=10)  # should be a NOP if already started
     predictions = service.predict(batch)
     predictions = predictions.argmax(axis=-1)
-    service.stop(timeout=10)
 
     return predictions
 
@@ -165,7 +197,7 @@ def inference_evaluator(
     return np.count_nonzero(comparison) / len(comparison)
 
 
-@pipeline(enable_cache=False, requirements_file=requirements_file)
+@pipeline(enable_cache=True, requirements_file=requirements_file)
 def mlflow_example_pipeline(
     importer,
     normalizer,

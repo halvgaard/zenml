@@ -11,6 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
+import numpy as np
 
 from pipeline import (
     TrainerConfig,
@@ -23,11 +24,33 @@ from pipeline import (
     batch_inference,
     inference_evaluator,
 )
+from zenml.repository import Repository
+from zenml.services import BaseService
+
+
+def get_service(step_name: str) -> BaseService:
+    """Load a service artifact saved in the repository during the last execution
+    of the pipeline step with the given step name.
+
+    Args:
+        step_name: pipeline step name
+
+    Returns:
+        BaseService: service artifact
+    """
+    repo = Repository()
+    pipe = repo.get_pipelines()[-1]
+    step = pipe.runs[-1].get_step(name=step_name)
+    for artifact_name, artifact_view in step.outputs.items():
+        # filter out anything but service artifacts
+        if artifact_view.type == "ServiceArtifact":
+            return artifact_view.read()
+
 
 if __name__ == "__main__":
 
     # Initialize a pipeline run
-    run_1 = mlflow_example_pipeline(
+    run = mlflow_example_pipeline(
         importer=importer_mnist(),
         normalizer=normalizer(),
         trainer=tf_trainer(config=TrainerConfig(epochs=5, lr=0.0003)),
@@ -37,4 +60,10 @@ if __name__ == "__main__":
         inference_evaluator=inference_evaluator(),
     )
 
-    run_1.run()
+    run.run()
+
+    service = get_service(step_name="predictor")
+
+    if not service.is_running:
+        service.start(timeout=10)
+    print(service.predict(np.random.rand(1, 28, 28)))

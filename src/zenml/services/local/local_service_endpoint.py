@@ -92,10 +92,17 @@ class LocalDaemonServiceEndpoint(BaseServiceEndpoint):
         """
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             try:
-                sock.bind(("", port))
-                sock.close()
+                result = sock.connect_ex(("localhost", port))
+                if result == 0:
+                    logger.debug(
+                        f"TCP port check: port {port} is already taken."
+                    )
+                    return False
+
+                logger.debug(f"TCP port check: port {port} is available.")
                 return True
-            except OSError:
+            except OSError as e:
+                logger.debug(f"Error checking TCP port {port}: {str(e)}")
                 return False
 
     def _lookup_free_port(self) -> int:
