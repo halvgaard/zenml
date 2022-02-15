@@ -12,17 +12,25 @@
 #  or implied. See the License for the specific language governing
 #  permissions and limitations under the License.
 
+import os
+
 import click
 
-from zenml.utils.daemonizer import daemonize
+from zenml.utils.daemon import daemonize
 
 
 @click.command()
 @click.option("--config-file", required=True, type=click.Path(exists=True))
 @click.option("--log-file", required=False, type=click.Path())
 @click.option("--pid-file", required=False, type=click.Path())
-def run(config_file: str, log_file: str, pid_file: str) -> None:
-    @daemonize(log_file=log_file, pid_file=pid_file)
+def run(
+    config_file: str,
+    log_file: str,
+    pid_file: str,
+) -> None:
+    @daemonize(
+        log_file=log_file, pid_file=pid_file, working_directory=os.getcwd()
+    )
     def launch_service(service_config_file: str) -> None:
         """Instantiate and launch a ZenML local service from its
         configuration file.
@@ -48,7 +56,8 @@ def run(config_file: str, log_file: str, pid_file: str) -> None:
         service = ServiceRegistry().load_service_from_json(config)
         if not isinstance(service, LocalDaemonService):
             raise TypeError(
-                f"Expected service type LocalDaemonService but got {type(service)} instead"
+                f"Expected service type LocalDaemonService but got "
+                f"{type(service)} instead"
             )
         service.run()
 

@@ -21,7 +21,6 @@ import tempfile
 from abc import abstractmethod
 from typing import Dict, List, Optional, Tuple
 
-import psutil
 from pydantic import Field
 
 from zenml.logger import get_logger
@@ -30,6 +29,7 @@ from zenml.services.local.local_service_endpoint import (
 )
 from zenml.services.service import BaseService, ServiceConfig
 from zenml.services.service_status import ServiceState, ServiceStatus
+from zenml.utils.daemon import get_daemon_pid_if_running
 
 logger = get_logger(__name__)
 
@@ -68,7 +68,7 @@ class LocalDaemonServiceStatus(ServiceStatus):
             is suppressed.
     """
 
-    runtime_path: Optional[str]
+    runtime_path: Optional[str] = None
     silent_daemon: bool = False
 
     @property
@@ -117,14 +117,7 @@ class LocalDaemonServiceStatus(ServiceStatus):
         pid_file = self.pid_file
         if not pid_file:
             return None
-        try:
-            with open(pid_file, "r") as f:
-                pid = int(f.read())
-        except OSError:
-            return None
-        if not pid or not psutil.pid_exists(pid):
-            return None
-        return pid
+        return get_daemon_pid_if_running(pid_file)
 
 
 class LocalDaemonService(BaseService):

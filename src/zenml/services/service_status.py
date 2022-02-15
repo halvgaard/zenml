@@ -49,7 +49,7 @@ class ServiceStatus(BaseModel):
 
     def update_state(
         self,
-        new_state: Optional[ServiceState],
+        new_state: Optional[ServiceState] = None,
         error: str = "",
     ) -> None:
         """Update the current operational state to reflect a new state

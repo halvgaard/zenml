@@ -57,8 +57,8 @@ class ServiceEndpointStatus(ServiceStatus):
     """
 
     protocol: ServiceEndpointProtocol = ServiceEndpointProtocol.TCP
-    hostname: Optional[str]
-    port: Optional[int]
+    hostname: Optional[str] = None
+    port: Optional[int] = None
 
     @property
     def uri(self) -> Optional[str]:
@@ -88,7 +88,7 @@ class BaseServiceEndpoint(BaseTypedModel):
     config: ServiceEndpointConfig = Field(default_factory=ServiceEndpointConfig)
     status: ServiceEndpointStatus = Field(default_factory=ServiceEndpointStatus)
     # TODO [MEDIUM] allow multiple monitors per endpoint
-    monitor: Optional[BaseServiceEndpointHealthMonitor]
+    monitor: Optional[BaseServiceEndpointHealthMonitor] = None
 
     def __init__(
         self,

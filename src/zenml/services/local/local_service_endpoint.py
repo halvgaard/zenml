@@ -49,7 +49,7 @@ class LocalDaemonServiceEndpointConfig(ServiceEndpointConfig):
     """
 
     protocol: ServiceEndpointProtocol = ServiceEndpointProtocol.TCP
-    port: Optional[int]
+    port: Optional[int] = None
     allocate_port: bool = True
 
 
