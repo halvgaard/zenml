@@ -319,8 +319,8 @@ class BaseService(BaseTypedModel, metaclass=BaseServiceMeta):
         self.provision()
         if timeout > 0:
             self.poll_service_status(timeout)
-        if not self.is_running:
-            raise Exception(f"Failed to start service {self}.")
+            if not self.is_running:
+                raise Exception(f"Failed to start service {self}.")
 
     def stop(self, timeout: int = 0, force: bool = False) -> None:
         """Stop the service and optionally wait for it to shutdown.
@@ -337,8 +337,8 @@ class BaseService(BaseTypedModel, metaclass=BaseServiceMeta):
         self.deprovision(force)
         if timeout > 0:
             self.poll_service_status(timeout)
-        if not self.is_stopped:
-            raise Exception(f"Failed to stop service {self}.")
+            if not self.is_stopped:
+                raise Exception(f"Failed to stop service {self}.")
 
     def __repr__(self) -> str:
         """String representation of the service."""
